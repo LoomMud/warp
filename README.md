@@ -9,7 +9,7 @@ Layout (spec §3.2): `/secure` (master, roles, login), `/std` (base classes), `/
 `/builders/<uid>` (staff workrooms).
 
 Rules: DCO sign-off on every commit (`git commit -s`), SPDX header in every `.wf` file
-(`// SPDX-License-Identifier: AGPL-3.0-only`), no secrets or unlicensed assets.
+(`SPDX-License-Identifier` tag, value `AGPL-3.0-only`), no secrets or unlicensed assets.
 
 ## Remotes
 
