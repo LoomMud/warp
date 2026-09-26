@@ -8,4 +8,9 @@ Layout (spec §3.2): `/secure` (master, roles, login), `/std` (base classes), `/
 
 Rules: DCO sign-off on every commit (`git commit -s`), SPDX header in every `.wf` file
 (`// SPDX-License-Identifier: LicenseRef-Oberfield-Proprietary`), no secrets or unlicensed assets.
-Interim origin until the GitHub org exists: `/paperclip/instances/default/shared/oberfield/warp.git`.
+
+## Remotes
+
+- Canonical remote: `https://github.com/LoomMud/warp` (private).
+- Interim mirror (read-only until Phase 1 completes):
+  `/paperclip/instances/default/shared/oberfield/warp.git`.
