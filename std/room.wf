@@ -44,7 +44,7 @@ pub fn long() -> string {
 pub fn tell(text: string, exclude: object? = null) {
     for ob in inventory(self()) {
         if ob != exclude {
-            send(ob, text)
+            send(ob, $"{text}\n")
         }
     }
 }

@@ -29,8 +29,8 @@ pub override fn visible() -> bool {
 // Apply: the connection is now bound to this object.
 fn logon() {
     connected = true
-    send(self(), "Welcome to Oberfield (Loom Phase 0).")
-    send(self(), $"You are {name}. Commands: look, go <dir> (or n/s/...), say <text>, update <path>, quit.")
+    write("Welcome to Oberfield (Loom Phase 0).")
+    write($"You are {name}. Commands: look, go <dir> (or n/s/...), say <text>, update <path>, quit.")
     let start = load_object("/domains/start/hall")
     move_to(start)
     start.tell($"{name} arrives.", self())
@@ -63,7 +63,7 @@ fn process_input(line: string) {
     } else if has_exit(verb) {
         cmd_go(verb)
     } else {
-        send(self(), "What?")
+        write("What?")
     }
 }
 
@@ -73,6 +73,11 @@ fn net_dead() {
         connected = false
         environment()?.tell($"{name} leaves the game.", self())
     }
+}
+
+// Send one line of text to this player (send() is verbatim, so add the newline).
+fn write(text: string) {
+    send(self(), $"{text}\n")
 }
 
 // All words after the first, joined by single spaces.
@@ -100,20 +105,20 @@ fn has_exit(dir: string) -> bool {
 fn cmd_look() {
     let env = environment()
     if env == null {
-        send(self(), "You are nowhere.")
+        write("You are nowhere.")
         return
     }
-    send(self(), env.long())
+    write(env.long())
     for ob in inventory(env) {
         if ob != self() and ob.visible() {
-            send(self(), $"{ob.short()} is here.")
+            write($"{ob.short()} is here.")
         }
     }
 }
 
 fn cmd_go(dir_arg: string) {
     if dir_arg == "" {
-        send(self(), "Go where?")
+        write("Go where?")
         return
     }
     var dir = dir_arg
@@ -122,12 +127,12 @@ fn cmd_go(dir_arg: string) {
     }
     let env = environment()
     if env == null {
-        send(self(), "You are nowhere.")
+        write("You are nowhere.")
         return
     }
     let path = env.exit_dest(dir)
     if path == null {
-        send(self(), "You can't go that way.")
+        write("You can't go that way.")
         return
     }
     let dest = load_object(path)
@@ -139,10 +144,10 @@ fn cmd_go(dir_arg: string) {
 
 fn cmd_say(text: string) {
     if text == "" {
-        send(self(), "Say what?")
+        write("Say what?")
         return
     }
-    send(self(), $"You say: {text}")
+    write($"You say: {text}")
     environment()?.tell($"{name} says: {text}", self())
 }
 
@@ -153,20 +158,20 @@ fn cmd_update(path_arg: string) {
     if path == "" {
         let env = environment()
         if env == null {
-            send(self(), "Update what?")
+            write("Update what?")
             return
         }
         path = object_name(env)
     }
     let err = compile_object(path)
     if err == null {
-        send(self(), $"{path}: Updated.")
+        write($"{path}: Updated.")
     } else {
-        send(self(), $"{path}: update failed.\n{err}")
+        write($"{path}: update failed.\n{err}")
     }
 }
 
 fn cmd_quit() {
-    send(self(), "Goodbye.")
+    write("Goodbye.")
     disconnect(self())
 }
