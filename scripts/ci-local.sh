@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Oberfield
-# SPDX-License-Identifier: LicenseRef-Oberfield-Proprietary
+# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Local gates before pushing: `loom check` (parse + link every .wf) and DCO.
 # LOOM_CLI: path to a loom-cli binary built from loom `main` (default: `loom-cli` on PATH).
