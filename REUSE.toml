@@ -1,0 +1,6 @@
+version = 1
+
+[[annotations]]
+path = ["README.md", ".gitignore", ".github/**", "**/.gitkeep"]
+SPDX-FileCopyrightText = "2026 Oberfield"
+SPDX-License-Identifier = "LicenseRef-Oberfield-Proprietary"
