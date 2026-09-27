@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/start/obj/torch
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a wooden torch"
+}
+
+pub override fn ids() -> [string] {
+    return ["torch"]
+}
+
+pub override fn long() -> string {
+    return "A stick of pine wrapped in pitch-soaked rags. It is not lit."
+}
+
+pub override fn value() -> int {
+    return 2
+}

@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/den
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "The Goblin Den"
+}
+
+pub override fn describe() -> string {
+    return "A low, stinking cave. Bones and scraps litter the floor around a heap of stolen goods. The only way out is west."
+}
+
+pub override fn exits() -> {string: string} {
+    return {"west": "/domains/forest/clearing"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/forest/npc/chief": 1, "/domains/forest/obj/chest": 1}
+}

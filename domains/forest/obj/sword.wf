@@ -1,0 +1,30 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/sword
+
+inherit /std/weapon
+
+pub override fn short() -> string {
+    return "a goblin-forged sword"
+}
+
+pub override fn ids() -> [string] {
+    return ["sword", "blade"]
+}
+
+pub override fn long() -> string {
+    return "A heavy, badly balanced sword. It will still do damage."
+}
+
+pub override fn sides() -> int {
+    return 8
+}
+
+pub override fn verb() -> string {
+    return "slash"
+}
+
+pub override fn value() -> int {
+    return 30
+}

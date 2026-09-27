@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/stream
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "A Babbling Stream"
+}
+
+pub override fn describe() -> string {
+    return "Cold, clear water runs over smooth stones. Wolf tracks cross the soft mud of the bank. The path leads back south."
+}
+
+pub override fn exits() -> {string: string} {
+    return {"south": "/domains/forest/path"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/forest/npc/wolf": 1}
+}

@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/jerkin
+
+inherit /std/armour
+
+pub override fn short() -> string {
+    return "a leather jerkin"
+}
+
+pub override fn ids() -> [string] {
+    return ["jerkin", "leather"]
+}
+
+pub override fn long() -> string {
+    return "Stiff, cracked leather, patched many times."
+}
+
+pub override fn armour_class() -> int {
+    return 2
+}

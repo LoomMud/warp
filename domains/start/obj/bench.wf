@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/start/obj/bench
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a stone bench"
+}
+
+pub override fn ids() -> [string] {
+    return ["bench"]
+}
+
+pub override fn long() -> string {
+    return "A bench of weathered stone, warm from the sun. It is far too heavy to move."
+}
+
+pub override fn gettable() -> bool {
+    return false
+}
+
+pub override fn in_room() -> string {
+    return "A stone bench stands beside the herb beds."
+}
