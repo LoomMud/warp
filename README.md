@@ -16,8 +16,8 @@ loom-cli serve --mudlib .            # telnet to $LOOM_TELNET_ADDR (default 127.
 LOOM_CLI=loom-cli tests/smoke.py     # scripted end-to-end check
 ```
 
-Pick a name, create a character (warrior or rogue), and type `help`. The Goblin Wood lies east of the hall.
-Builders (tier 2+, listed in `/secure/staff`) also get `update`, `clone`, `dest`, `goto` and `reset`.
+Pick a name and password (an R2 account), choose a class (warrior or rogue), and type `help`. The Goblin Wood lies east of the hall.
+Builders (tier 2+, listed in `/secure/staff`) also get `update`, `ed`, `clone`, `dest`, `goto` and `reset`.
 
 - `fixtures/item10k/`: the E1.2 10k-clone `/std/item` upgrade fixture (V4).
 - `loadbot/`: the command mix and login contract for the R4 load bot.

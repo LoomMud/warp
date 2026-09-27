@@ -8,25 +8,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 This is what the Rust load bot in `loom` needs to know to drive Warp. If you
 change any of it, change it here in the same PR.
 
-## Login (new character per bot)
+## Login
+
+Every bot has an R2 account (the driver's in-memory backend when there is
+no `DATABASE_URL`). One account is one character, and they share a name.
 
 | Wait for (regex) | Send |
 |---|---|
 | `By what name` | the bot's name: 3–16 letters `a`–`z` (no digits). Suggested: `bot` + base-26 of the index, e.g. `botaaa`, `botaab`, … |
-| `Create a new character` | `yes` |
-| `Choose a class` | `warrior` (or `rogue`) |
+| `Password: ` | the bot's password (6–128 characters) |
+| then one of the three rows below | |
+| `Create a new character` | *(no such account yet)* `yes`, then on `Choose a password` send the password, then on `Confirm password` send it again |
+| `Choose a class` | `warrior` (or `rogue`). This appears after creation, and for an existing account whose character isn't in memory (e.g. after a driver restart) |
+| `You take over your body again` | *(reconnect to a link-dead character; nothing to send)* |
 | `<\d+/\d+hp> ` | *(logged in)* |
 
-A bot that reconnects with a name already in use gets `already playing`
-while the old connection is up. Once that connection has dropped, it gets
-`You take over your body again` and then a prompt, so the bot can reconnect
-after a disconnect without creating a new character. Characters are not
-saved across driver restarts.
+Failure prompts: `already playing` (that character is connected; the bot
+must wait until its old connection has dropped), `That name was just taken`
+(two creations raced), `Too many failed attempts` (disconnects after 3 wrong
+passwords), and `The account service is unavailable` (backend queue full or
+down; retry later).
 
-**Part 2 (after the account efuns, OBI-85):** a password step is added
-after the name (`Password:`; a new account also gets a confirmation). This
-file will say exactly what to send. Bots should key their login logic on the
-prompts above, not on a fixed number of lines.
+Passwords are hashed with Argon2id (19 MiB, t=2) off the world thread, so
+each login costs real CPU time, but it does
+not stall the tick. Ramp logins up (e.g. 10/s) rather than connecting 500
+bots at once, and report login latency separately from command latency.
+Characters are not saved across driver restarts.
 
 ## The prompt is the end-of-output marker
 
@@ -57,6 +64,6 @@ fan-out produces plenty of unsolicited output to back up on.
 
 ## Smoke check
 
-`tests/smoke.py` in this repo does a scripted login + command session
-against a real `loom serve`. The `basics` scenario covers every command in
-the mix.
+`tests/smoke.py` in this repo runs scripted sessions against a real
+`loom serve`. Its `login()` is the reference implementation of the flow
+above, and the `basics` scenario covers every command in the mix.
