@@ -2,21 +2,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // /secure/login: one clone per connection until the player is in the game.
-// A small state machine: name -> (new character: confirm -> class) or
-// (existing link-dead character: reconnect).
+// A small state machine over R2 accounts (account_login / account_create,
+// OBI-85). For the alpha, one account is one character, and they share a
+// name.
 //
-// Alpha limitation: there are no passwords until the account efuns land
-// (OBI-85). Until then a character that is connected cannot be taken over,
-// and a link-dead one is reconnected by name. Part 2 of OBI-38 replaces the
-// "name" step with account_login()/account_create().
+//   name -> password -> account_login
+//     ok, character in memory      -> reconnect (unless it is connected)
+//     ok, no character since boot  -> class -> new character
+//     bad_credentials              -> "create X?" -> new password twice
+//                                     -> account_create -> class
+//
+// Both account efuns are asynchronous. The driver hashes off the world
+// thread and later calls account_result() here with the request id.
+// Passwords are kept only in local variables and in the one `pending_pw`
+// slot between "choose" and "confirm", which is cleared straight away.
 
 inherit /std/object
 
 var state: string = "name"
 var wanted: string = ""
+var pending_pw: string = ""
+var request: int = -1
+var attempts: int = 0
 
 pub fn classes() -> [string] {
     return ["warrior", "rogue"]
+}
+
+pub fn max_attempts() -> int {
+    return 3
 }
 
 pub override fn short() -> string {
@@ -27,12 +41,19 @@ fn ask(text: string) {
     send(self(), text)
 }
 
+fn ask_name() {
+    state = "name"
+    wanted = ""
+    pending_pw = ""
+    ask("By what name do you wish to be known? ")
+}
+
 fn logon() {
     message("")
     message("  ~ O B E R F I E L D ~")
     message("  An internal alpha of the Warp mudlib on the Loom driver.")
     message("")
-    ask("By what name do you wish to be known? ")
+    ask_name()
 }
 
 pub fn valid_name(n: string) -> bool {
@@ -51,45 +72,126 @@ pub fn valid_name(n: string) -> bool {
 }
 
 fn process_input(line: string) {
-    let input = lower_case(trim(line))
     if state == "name" {
-        got_name(input)
-    } else if state == "confirm" {
-        got_confirm(input)
+        got_name(lower(trim(line)))
+    } else if state == "password" {
+        got_password(line)
+    } else if state == "confirm_create" {
+        got_confirm(lower(trim(line)))
+    } else if state == "new_password" {
+        got_new_password(line)
+    } else if state == "confirm_password" {
+        got_confirm_password(line)
     } else if state == "class" {
-        got_class(input)
+        got_class(lower(trim(line)))
+    } else if state == "waiting" {
+        message("One moment...")
     }
 }
 
 fn got_name(n: string) {
     if not valid_name(n) {
         message("Names are 3 to 16 letters, a to z.")
-        ask("By what name do you wish to be known? ")
+        ask_name()
         return
     }
-    let existing = load_object("/secure/userd").find(n)
+    wanted = n
+    state = "password"
+    ask("Password: ")
+}
+
+fn got_password(pw: string) {
+    state = "waiting"
+    request = account_login(wanted, pw)
+}
+
+fn got_confirm(answer: string) {
+    if answer == "y" or answer == "yes" {
+        state = "new_password"
+        ask("Choose a password (6 or more characters): ")
+        return
+    }
+    ask_name()
+}
+
+fn got_new_password(pw: string) {
+    if len(pw) < 6 or len(pw) > 128 {
+        message("Passwords are 6 to 128 characters.")
+        ask("Choose a password (6 or more characters): ")
+        return
+    }
+    pending_pw = pw
+    state = "confirm_password"
+    ask("Confirm password: ")
+}
+
+fn got_confirm_password(pw: string) {
+    let first = pending_pw
+    pending_pw = ""
+    if pw != first {
+        message("Passwords do not match.")
+        state = "new_password"
+        ask("Choose a password (6 or more characters): ")
+        return
+    }
+    state = "creating"
+    request = account_create(wanted, pw)
+}
+
+// Apply (OBI-85): result of account_login/account_create request `id`.
+// On success `detail` is the account id; on failure it is one of `exists`,
+// `bad_credentials`, `invalid` or `unavailable`.
+fn account_result(id: int, ok: bool, detail: string) {
+    if id != request {
+        return
+    }
+    request = -1
+    let creating = state == "creating"
+    if ok {
+        logged_in(creating)
+        return
+    }
+    if detail == "unavailable" {
+        message("The account service is unavailable. Please try again later.")
+        ask_name()
+    } else if detail == "invalid" {
+        message("Passwords are 6 to 128 characters.")
+        ask_name()
+    } else if creating and detail == "exists" {
+        message("That name was just taken.")
+        ask_name()
+    } else {
+        // bad_credentials: wrong password, or no such account.
+        attempts += 1
+        if attempts >= max_attempts() {
+            message("Too many failed attempts.")
+            disconnect(self())
+            return
+        }
+        state = "confirm_create"
+        message("Wrong password, or no such character.")
+        ask($"Create a new character called {capitalize(wanted)}? (yes/no) ")
+    }
+}
+
+fn logged_in(created: bool) {
+    let existing = load_object("/secure/userd").find(wanted)
     if existing != null {
         if existing.is_connected() as bool {
             message("That character is already playing.")
-            ask("By what name do you wish to be known? ")
+            ask_name()
             return
         }
         load_object("/secure/master").login_complete(self(), existing, true)
         return
     }
-    wanted = n
-    state = "confirm"
-    ask($"Create a new character called {capitalize(n)}? (yes/no) ")
-}
-
-fn got_confirm(answer: string) {
-    if answer == "y" or answer == "yes" {
-        state = "class"
-        ask($"Choose a class ({join(classes(), ", ")}): ")
-        return
+    if created {
+        message($"Account {capitalize(wanted)} created.")
     }
-    state = "name"
-    ask("By what name do you wish to be known? ")
+    // A valid account with no character in memory (new, or after a driver
+    // restart: characters are not saved yet).
+    state = "class"
+    ask($"Choose a class ({join(classes(), ", ")}): ")
 }
 
 fn got_class(c: string) {
@@ -97,11 +199,15 @@ fn got_class(c: string) {
         ask($"Choose a class ({join(classes(), ", ")}): ")
         return
     }
-    // Someone may have taken the name while we were choosing.
-    if load_object("/secure/userd").find(wanted) != null {
-        message("That name was just taken.")
-        state = "name"
-        ask("By what name do you wish to be known? ")
+    // Another session of the same account may have finished first.
+    let existing = load_object("/secure/userd").find(wanted)
+    if existing != null {
+        if existing.is_connected() as bool {
+            message("That character is already playing.")
+            ask_name()
+            return
+        }
+        load_object("/secure/master").login_complete(self(), existing, true)
         return
     }
     let player = clone_object("/std/player")
