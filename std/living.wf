@@ -64,9 +64,10 @@ pub fn xp_value() -> int {
     return level * level * 10
 }
 
-// World ticks per regenerated hit point (outside combat).
-pub fn regen_ticks() -> int {
-    return 20
+// Combat pulses (2 s each, see /secure/combatd now()) per regenerated hit
+// point, outside combat.
+pub fn regen_pulses() -> int {
+    return 1
 }
 
 // "the goblin" / "Aragorn": how others refer to this in messages.
@@ -110,7 +111,7 @@ pub fn query_hp() -> int {
     if fighting != null {
         return hp
     }
-    let gained = (clock() - hp_at) / regen_ticks()
+    let gained = (clock() - hp_at) / regen_pulses()
     if hp + gained > mx {
         return mx
     }
@@ -287,7 +288,7 @@ pub fn combat_round() -> bool {
     if target == null {
         return false
     }
-    if target.is_removed() or environment(target) != environment() or environment() == null {
+    if destructed(target) or environment(target) != environment() or environment() == null {
         stop_fighting()
         return false
     }
@@ -301,7 +302,7 @@ pub fn combat_round() -> bool {
 }
 
 fn roll(n: int) -> int {
-    return load_object("/secure/rng").roll(n) as int
+    return random(n)
 }
 
 fn strike(target: object) {

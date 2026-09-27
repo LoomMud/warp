@@ -19,12 +19,11 @@ pub override fn main(me: object, args: string) -> bool {
         return true
     }
     let dirs = keys(env.exits() as {string: string})
-    let rng = load_object("/secure/rng")
-    if len(dirs) == 0 or (rng.roll(3) as int) == 0 {
+    if len(dirs) == 0 or random(3) == 0 {
         me.message("You try to flee, but can't get away!")
         return true
     }
-    let dir = dirs[rng.roll(len(dirs)) as int] as string
+    let dir = dirs[random(len(dirs))] as string
     me.message("You flee head over heels!")
     if me.go_dir(dir, "flees") as bool {
         load_object("/cmds/player/look").main(me, "")

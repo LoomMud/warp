@@ -18,7 +18,7 @@ pub override fn main(me: object, args: string) -> bool {
     }
     let wh = load_object("/domains/test/warehouse")
     if ws[1] == "fill" and len(ws) == 3 {
-        let n = parse_int(ws[2]) ?? 0
+        let n = to_int(ws[2]) ?? 0
         if n <= 0 or n > 5000 {
             me.message("fill: 1..5000 per call.")
             return true
@@ -27,7 +27,7 @@ pub override fn main(me: object, args: string) -> bool {
         return true
     }
     if ws[1] == "status" {
-        me.message($"item10k: {wh.item_count()} items, version sum {wh.version_sum()}.")
+        me.message($"item10k: {wh.item_count()} items, version sum {wh.version_sum()}, condition sum {wh.condition_sum()}.")
         return true
     }
     me.message(help())

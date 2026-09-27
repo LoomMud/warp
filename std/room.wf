@@ -79,7 +79,7 @@ pub fn find_here(word: string, exclude: object? = null) -> object? {
     var key = word
     let parts = split(word, ".")
     if len(parts) == 2 {
-        let n = parse_int(parts[0])
+        let n = to_int(parts[0])
         if n != null {
             want = n
             key = parts[1]
@@ -136,7 +136,7 @@ pub fn reset() {
     for path in want {
         var kept: [object] = []
         for ob in spawned[path] ?? [] {
-            if not ob.is_removed() and environment(ob) == self() {
+            if not destructed(ob) and environment(ob) == self() {
                 kept += [ob]
             }
         }
