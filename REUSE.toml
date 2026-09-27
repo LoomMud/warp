@@ -1,6 +1,6 @@
 version = 1
 
 [[annotations]]
-path = ["README.md", ".gitignore", ".github/**", "**/.gitkeep"]
+path = ["README.md", ".gitignore", ".github/**", "**/.gitkeep", "loadbot/*.tsv"]
 SPDX-FileCopyrightText = "2026 Oberfield"
 SPDX-License-Identifier = "AGPL-3.0-only"

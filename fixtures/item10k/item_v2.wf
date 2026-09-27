@@ -1,0 +1,94 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// fixtures/item10k/item_v2.wf: version 2 of /std/item for the E1.2 exit
+// test (V4 / OBI-34). The test copies this file over std/item.wf and
+// recompiles /std/item with 10,000 live clones.
+//
+// Schema change vs v1: `condition: int` (0..100) is replaced by
+// `durability`/`max_durability` (0..1000). upgrade() converts the old
+// value (durability = condition * 10), so after the upgrade every clone
+// satisfies query_condition() == its v1 condition and schema_version() == 2.
+// Every function v1 has is kept (descendants such as /std/weapon are
+// re-linked against this in the same wave).
+
+inherit /std/object
+
+// Per-instance mutable state: wear and tear, 0..max_durability.
+var durability: int = 1000
+var max_durability: int = 1000
+
+// Apply (V4): migrate v1 state. `old` holds removed/changed variables.
+fn upgrade(from_version: int, old: {string: any}) {
+    if from_version < 2 and "condition" in old {
+        let c = old["condition"] as int
+        durability = c * 10
+        max_durability = 1000
+    }
+}
+
+// ---- static content (override) -----------------------------------------
+
+pub override fn short() -> string {
+    return "a nondescript item"
+}
+
+pub override fn ids() -> [string] {
+    return ["item", "thing"]
+}
+
+pub override fn weight() -> int {
+    return 1
+}
+
+pub fn value() -> int {
+    return 0
+}
+
+pub override fn gettable() -> bool {
+    return true
+}
+
+pub override fn in_room() -> string {
+    return $"{capitalize(short())} lies here."
+}
+
+// ---- mutable state --------------------------------------------------------
+
+// Percentage, as in v1.
+pub fn query_condition() -> int {
+    return durability * 100 / max_durability
+}
+
+pub fn wear_down(amount: int) {
+    durability -= amount * 10
+    if durability < 0 {
+        durability = 0
+    }
+}
+
+pub fn query_durability() -> int {
+    return durability
+}
+
+pub fn condition_text() -> string {
+    let condition = query_condition()
+    if condition >= 90 {
+        return "in excellent condition"
+    } else if condition >= 60 {
+        return "a little worn"
+    } else if condition >= 30 {
+        return "badly worn"
+    }
+    return "about to fall apart"
+}
+
+pub override fn long() -> string {
+    return $"It is {short()}, {condition_text()}."
+}
+
+// Schema version of this program's variables (D-P1.4). Bump it together
+// with an upgrade() that migrates the old shape.
+pub fn schema_version() -> int {
+    return 2
+}
