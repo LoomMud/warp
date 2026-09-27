@@ -1,0 +1,75 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/item: anything that can be picked up and carried.
+//
+// This is also the E1.2 fixture program (V4 / OBI-34): the exit test clones
+// it 10,000 times (see /domains/test/warehouse and fixtures/item10k/) and
+// recompiles it with fixtures/item10k/item_v2.wf, whose upgrade() migrates
+// `condition`. Keep the per-instance state here small and the static content
+// in functions (D-P1.4) so that fixture stays representative.
+
+inherit /std/object
+
+// Per-instance mutable state: wear and tear, 0..100.
+var condition: int = 100
+
+// ---- static content (override) -----------------------------------------
+
+pub override fn short() -> string {
+    return "a nondescript item"
+}
+
+pub override fn ids() -> [string] {
+    return ["item", "thing"]
+}
+
+pub override fn weight() -> int {
+    return 1
+}
+
+pub fn value() -> int {
+    return 0
+}
+
+pub override fn gettable() -> bool {
+    return true
+}
+
+pub override fn in_room() -> string {
+    return $"{capitalize(short())} lies here."
+}
+
+// ---- mutable state --------------------------------------------------------
+
+pub fn query_condition() -> int {
+    return condition
+}
+
+pub fn wear_down(amount: int) {
+    condition -= amount
+    if condition < 0 {
+        condition = 0
+    }
+}
+
+pub fn condition_text() -> string {
+    if condition >= 90 {
+        return "in excellent condition"
+    } else if condition >= 60 {
+        return "a little worn"
+    } else if condition >= 30 {
+        return "badly worn"
+    }
+    return "about to fall apart"
+}
+
+pub override fn long() -> string {
+    return $"It is {short()}, {condition_text()}."
+}
+
+// Schema version of this program's variables (D-P1.4). Bump it together
+// with an upgrade() that migrates the old shape.
+pub fn schema_version() -> int {
+    return 1
+}

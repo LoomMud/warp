@@ -1,0 +1,51 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/zone: a Diku-style zone. A zone lists its rooms and a lifespan; every
+// lifespan it loads each room and calls reset() on it. Each domain has one
+// zone object (/domains/<area>/zone) and /secure/master loads every zone
+// listed in its zones() at boot.
+
+inherit /std/object
+
+// call_out handle of the next reset (-1 = none scheduled).
+var next_reset: int = -1
+var resets_done: int = 0
+
+// ---- static content (override) -----------------------------------------
+
+pub override fn short() -> string {
+    return "a zone"
+}
+
+// Room paths in this zone.
+pub fn rooms() -> [string] {
+    return []
+}
+
+// World ticks between resets (the world ticks every 100 ms).
+pub fn lifespan() -> int {
+    return 3000
+}
+
+// ---- behaviour ----------------------------------------------------------
+
+override fn create() {
+    reset()
+}
+
+// Reset every room now and schedule the next reset.
+pub fn reset() {
+    for path in rooms() {
+        load_object(path).reset()
+    }
+    resets_done += 1
+    if next_reset >= 0 {
+        remove_call_out(next_reset)
+    }
+    next_reset = call_out("reset", lifespan())
+}
+
+pub fn query_resets() -> int {
+    return resets_done
+}

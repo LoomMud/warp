@@ -1,0 +1,20 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/staff: alpha staff list. Character name -> tier (spec §5.11: 1
+// apprentice, 2 builder, 3 domain lead, 4 arch). Everyone else is a player
+// (tier 0). Interim until S2 (OBI-36) moves tiers to /secure/roles on the
+// R2 roles schema; edit and `update /secure/staff` to change it live.
+
+pub fn staff() -> {string: int} {
+    return {
+        "aragorn": 4,
+        "gimli": 2,
+        "legolas": 2,
+        "builder": 2
+    }
+}
+
+pub fn tier_of(who: string) -> int {
+    return staff()[who] ?? 0
+}

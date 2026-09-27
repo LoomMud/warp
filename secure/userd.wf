@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/userd: character name -> player object, for every character
+// created since boot (connected or link-dead). Player state is not saved
+// across driver restarts yet (see docs/std-conventions.md, "Not yet").
+
+var players: {string: object} = {:}
+
+pub fn register(player: object) {
+    let tp = this_player()
+    if not (load_object("/secure/master").is_login(tp) as bool) {
+        return
+    }
+    let n = player.query_name() as string
+    if not (n in players) {
+        players[n] = player
+    }
+}
+
+pub fn find(who: string) -> object? {
+    return players[who]
+}
+
+// Connected players, in creation order.
+pub fn online() -> [object] {
+    var out: [object] = []
+    for n in players {
+        let p = players[n] ?? self()
+        if p != self() and (p.is_connected() as bool) {
+            out += [p]
+        }
+    }
+    return out
+}
+
+pub fn character_count() -> int {
+    return len(players)
+}

@@ -1,0 +1,423 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/living: anything that can fight, die and move under its own power.
+// Base of /std/player and /std/npc.
+//
+// Combat is Diku-style: `kill` sets `fighting`, and /secure/combatd calls
+// combat_round() on every fighter once per round (2 s). Each attack rolls
+// d20 + hitroll() against 10 + the target's armour_class(), then weapon or
+// bare-hand dice for damage.
+//
+// Hit points regenerate lazily: `hp` and `hp_at` (the combatd clock when hp
+// was last written) are stored, and query_hp() adds what regenerated since.
+// That keeps idle livings off the heartbeat list entirely.
+
+inherit /std/object
+
+var hp: int = -1
+var hp_at: int = 0
+var level: int = 1
+var xp: int = 0
+var fighting: object? = null
+var wielded: object? = null
+var worn: {string: object} = {:}
+
+// ---- static content (override) -----------------------------------------
+
+pub override fn is_living() -> bool {
+    return true
+}
+
+pub fn max_hp() -> int {
+    return 10 + level * 10
+}
+
+// Bare-hand damage dice (used with no weapon wielded).
+pub fn bare_dice() -> int {
+    return 1
+}
+
+pub fn bare_sides() -> int {
+    return 4
+}
+
+pub fn base_hitroll() -> int {
+    return level / 2
+}
+
+pub fn base_damroll() -> int {
+    return level / 3
+}
+
+pub fn natural_ac() -> int {
+    return 0
+}
+
+// Attacks per round.
+pub fn attacks() -> int {
+    return 1
+}
+
+// Experience granted to whoever kills this.
+pub fn xp_value() -> int {
+    return level * level * 10
+}
+
+// World ticks per regenerated hit point (outside combat).
+pub fn regen_ticks() -> int {
+    return 20
+}
+
+// "the goblin" / "Aragorn": how others refer to this in messages.
+pub fn the_name() -> string {
+    if name != "" {
+        return capitalize(name)
+    }
+    let ws = words(short())
+    if len(ws) > 1 and (ws[0] == "a" or ws[0] == "an" or ws[0] == "some") {
+        return $"the {join_from(ws, 1)}"
+    }
+    return short()
+}
+
+pub fn cap_name() -> string {
+    return capitalize(the_name())
+}
+
+pub override fn in_room() -> string {
+    let f = fighting
+    if f != null and environment(f) == environment() {
+        if f == this_player() {
+            return $"{cap_name()} is here, fighting YOU!"
+        }
+        return $"{cap_name()} is here, fighting {f.the_name()}."
+    }
+    return $"{cap_name()} is here."
+}
+
+// ---- hit points ---------------------------------------------------------
+
+fn clock() -> int {
+    return load_object("/secure/combatd").now() as int
+}
+
+pub fn query_hp() -> int {
+    let mx = max_hp()
+    if hp < 0 {
+        return mx
+    }
+    if fighting != null {
+        return hp
+    }
+    let gained = (clock() - hp_at) / regen_ticks()
+    if hp + gained > mx {
+        return mx
+    }
+    return hp + gained
+}
+
+pub fn set_hp(value: int) {
+    hp = value
+    if hp > max_hp() {
+        hp = max_hp()
+    }
+    hp_at = clock()
+}
+
+pub fn query_level() -> int {
+    return level
+}
+
+pub fn set_level(value: int) {
+    level = value
+}
+
+pub fn query_xp() -> int {
+    return xp
+}
+
+pub fn gain_xp(amount: int) {
+    xp += amount
+    let need = level * level * 100
+    if xp >= need {
+        let before = max_hp()
+        level += 1
+        message($"You advance to level {level}!")
+        set_hp(query_hp() + max_hp() - before)
+    }
+}
+
+// ---- equipment ----------------------------------------------------------
+
+pub fn query_wielded() -> object? {
+    let w = wielded
+    if w != null and environment(w) != self() {
+        wielded = null
+    }
+    return wielded
+}
+
+pub fn wield(ob: object) -> string {
+    if environment(ob) != self() {
+        return "You are not carrying that."
+    }
+    if not ob.is_weapon() {
+        return "You cannot wield that."
+    }
+    wielded = ob
+    return ""
+}
+
+pub fn unwield() {
+    wielded = null
+}
+
+pub fn wear(ob: object) -> string {
+    if environment(ob) != self() {
+        return "You are not carrying that."
+    }
+    if not ob.is_armour() {
+        return "You cannot wear that."
+    }
+    let slot = ob.slot() as string
+    worn[slot] = ob
+    return ""
+}
+
+pub fn remove_worn(ob: object) {
+    var next: {string: object} = {:}
+    for slot in worn {
+        let w = worn[slot]
+        if w != null and w != ob {
+            next[slot] = w
+        }
+    }
+    worn = next
+}
+
+pub fn is_equipped(ob: object) -> bool {
+    if ob == query_wielded() {
+        return true
+    }
+    for slot in worn {
+        if worn[slot] == ob {
+            return true
+        }
+    }
+    return false
+}
+
+pub fn armour_class() -> int {
+    var ac = natural_ac()
+    for slot in worn {
+        let w = worn[slot]
+        if w != null and environment(w) == self() {
+            ac += w.armour_class() as int
+        }
+    }
+    return ac
+}
+
+pub fn hitroll() -> int {
+    var hr = base_hitroll()
+    let w = query_wielded()
+    if w != null {
+        hr += w.hitroll() as int
+    }
+    return hr
+}
+
+// ---- combat -------------------------------------------------------------
+
+pub fn query_fighting() -> object? {
+    return fighting
+}
+
+// Start (or switch to) fighting `target`. Returns "" or a reason it can't.
+pub fn attack(target: object) -> string {
+    let env = environment()
+    if env == null or environment(target) != env {
+        return "They are not here."
+    }
+    if target == self() {
+        return "You hit yourself. Ouch."
+    }
+    if not target.is_living() {
+        return "You can only fight living things."
+    }
+    if env.peaceful() {
+        return "A strange calm stops you from fighting here."
+    }
+    if hp < 0 {
+        set_hp(max_hp())
+    } else {
+        set_hp(query_hp())
+    }
+    fighting = target
+    load_object("/secure/combatd").enlist(self())
+    target.defend(self())
+    return ""
+}
+
+// `attacker` has attacked us: fight back if we are not already fighting.
+pub fn defend(attacker: object) {
+    if fighting == null {
+        set_hp(query_hp())
+        fighting = attacker
+        load_object("/secure/combatd").enlist(self())
+    }
+}
+
+pub fn stop_fighting() {
+    if fighting != null {
+        set_hp(query_hp())
+    }
+    fighting = null
+}
+
+// Another living arrived in our room (see /std/room arrived()).
+pub fn see_arrival(who: object) {
+}
+
+// One combat round (called by /secure/combatd). Returns whether we are
+// still fighting afterwards.
+pub fn combat_round() -> bool {
+    let target = fighting
+    if target == null {
+        return false
+    }
+    if target.is_removed() or environment(target) != environment() or environment() == null {
+        stop_fighting()
+        return false
+    }
+    var i = 0
+    let n = attacks()
+    while i < n and fighting != null {
+        strike(target)
+        i += 1
+    }
+    return fighting != null
+}
+
+fn roll(n: int) -> int {
+    return load_object("/secure/rng").roll(n) as int
+}
+
+fn strike(target: object) {
+    let env = environment()
+    if env == null {
+        return
+    }
+    let d20 = roll(20) + 1
+    let need = 10 + (target.armour_class() as int)
+    let w = query_wielded()
+    var verb = "hit"
+    var dice = bare_dice()
+    var sides = bare_sides()
+    var bonus = base_damroll()
+    if w != null {
+        verb = w.verb() as string
+        dice = w.dice() as int
+        sides = w.sides() as int
+        bonus += w.damroll() as int
+    }
+    if d20 != 20 and (d20 == 1 or d20 + hitroll() < need) {
+        message($"You miss {target.the_name()}.")
+        target.message($"{cap_name()} misses you.")
+        env.tell_except($"{cap_name()} misses {target.the_name()}.", [self(), target])
+        return
+    }
+    var dmg = bonus
+    var k = 0
+    while k < dice {
+        dmg += roll(sides) + 1
+        k += 1
+    }
+    if dmg < 1 {
+        dmg = 1
+    }
+    let how = severity(dmg)
+    message($"You {verb} {target.the_name()}{how}.")
+    target.message($"{cap_name()} {verb}s you{how}.")
+    env.tell_except($"{cap_name()} {verb}s {target.the_name()}{how}.", [self(), target])
+    if w != null and roll(10) == 0 {
+        w.wear_down(1)
+    }
+    target.take_damage(dmg, self())
+}
+
+fn severity(dmg: int) -> string {
+    if dmg <= 2 {
+        return " lightly"
+    } else if dmg <= 5 {
+        return ""
+    } else if dmg <= 9 {
+        return " hard"
+    } else if dmg <= 14 {
+        return " very hard"
+    }
+    return " with DEVASTATING force"
+}
+
+// Lose `dmg` hit points to `attacker`; dies at 0. Returns true if it died.
+pub fn take_damage(dmg: int, attacker: object?) -> bool {
+    set_hp(query_hp() - dmg)
+    if hp <= 0 {
+        die(attacker)
+        return true
+    }
+    return false
+}
+
+// Default death: leave a corpse holding our inventory, reward the killer,
+// and leave play. /std/player overrides this.
+pub fn die(killer: object?) {
+    let env = environment()
+    fighting = null
+    if env != null {
+        env.tell($"{cap_name()} is DEAD!", self())
+        let corpse = clone_object("/std/corpse")
+        corpse.set_dead_name(short())
+        for ob in inventory(self()) {
+            ob.move(corpse)
+        }
+        corpse.move(env)
+    }
+    if killer != null {
+        killer.killed(self())
+    }
+    remove()
+}
+
+// We killed `victim`.
+pub fn killed(victim: object) {
+    fighting = null
+    let gain = victim.xp_value() as int
+    message($"{capitalize(victim.the_name())} is dead! You gain {gain} experience.")
+    gain_xp(gain)
+}
+
+// ---- movement -------------------------------------------------------------
+
+// Walk through exit `dir` with the usual messages. Returns false (and says
+// why, to us) if there is no such exit.
+pub fn go_dir(dir: string, verb: string = "leaves") -> bool {
+    let env = environment()
+    if env == null {
+        message("You are nowhere.")
+        return false
+    }
+    let path = env.exit_dest(dir)
+    if path == null {
+        message("You can't go that way.")
+        return false
+    }
+    let dest = load_object(path)
+    stop_fighting()
+    env.tell($"{cap_name()} {verb} {dir}.", self())
+    move_to(dest)
+    dest.tell($"{cap_name()} arrives.", self())
+    dest.arrived(self())
+    return true
+}

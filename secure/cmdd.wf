@@ -1,0 +1,78 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/cmdd: verb -> command program. Tables are functions (D-P1.4), so
+// adding a command is: write /cmds/<group>/<verb>.wf, add it here, then
+// `update /secure/cmdd`.
+
+pub fn player_commands() -> {string: string} {
+    return {
+        "look": "/cmds/player/look",
+        "go": "/cmds/player/go",
+        "say": "/cmds/player/say",
+        "emote": "/cmds/player/emote",
+        "tell": "/cmds/player/tell",
+        "get": "/cmds/player/get",
+        "take": "/cmds/player/get",
+        "drop": "/cmds/player/drop",
+        "inventory": "/cmds/player/inventory",
+        "wield": "/cmds/player/wield",
+        "wear": "/cmds/player/wear",
+        "kill": "/cmds/player/kill",
+        "flee": "/cmds/player/flee",
+        "score": "/cmds/player/score",
+        "who": "/cmds/player/who",
+        "help": "/cmds/player/help",
+        "quit": "/cmds/player/quit"
+    }
+}
+
+// Tier 2+ (builders).
+pub fn builder_commands() -> {string: string} {
+    return {
+        "update": "/cmds/builder/update",
+        "clone": "/cmds/builder/clone",
+        "dest": "/cmds/builder/dest",
+        "goto": "/cmds/builder/goto",
+        "reset": "/cmds/builder/reset"
+    }
+}
+
+// Tier 4+ (arch): test and operations tools.
+pub fn arch_commands() -> {string: string} {
+    return {
+        "fixture": "/cmds/arch/fixture"
+    }
+}
+
+pub fn find(verb: string, tier: int) -> string? {
+    let p = player_commands()
+    if verb in p {
+        return p[verb]
+    }
+    if tier >= 2 {
+        let b = builder_commands()
+        if verb in b {
+            return b[verb]
+        }
+    }
+    if tier >= 4 {
+        let a = arch_commands()
+        if verb in a {
+            return a[verb]
+        }
+    }
+    return null
+}
+
+// Every verb available at `tier`, sorted as declared.
+pub fn verbs(tier: int) -> [string] {
+    var out: [string] = keys(player_commands())
+    if tier >= 2 {
+        out += keys(builder_commands())
+    }
+    if tier >= 4 {
+        out += keys(arch_commands())
+    }
+    return out
+}

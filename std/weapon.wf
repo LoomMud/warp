@@ -1,0 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/weapon: a wieldable item. Damage is Diku-style dice: dice() rolls of
+// a sides()-sided die, plus damroll().
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a weapon"
+}
+
+pub override fn ids() -> [string] {
+    return ["weapon"]
+}
+
+pub override fn weight() -> int {
+    return 3
+}
+
+pub override fn is_weapon() -> bool {
+    return true
+}
+
+pub fn dice() -> int {
+    return 1
+}
+
+pub fn sides() -> int {
+    return 6
+}
+
+pub fn damroll() -> int {
+    return 0
+}
+
+pub fn hitroll() -> int {
+    return 0
+}
+
+// Verb used in combat messages ("You slash the goblin").
+pub fn verb() -> string {
+    return "hit"
+}

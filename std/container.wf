@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/container: an item that holds other items (bags, chests, corpses).
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a container"
+}
+
+pub override fn ids() -> [string] {
+    return ["container"]
+}
+
+// Maximum number of items it holds.
+pub fn capacity() -> int {
+    return 10
+}
+
+pub fn can_hold(ob: object) -> bool {
+    return len(inventory(self())) < capacity() and not ob.is_living()
+}
+
+pub fn contents_text() -> string {
+    let inv = inventory(self())
+    if len(inv) == 0 {
+        return "It is empty."
+    }
+    var names: [string] = []
+    for ob in inv {
+        names += [ob.short() as string]
+    }
+    return $"It contains: {join(names, ", ")}."
+}
+
+pub override fn long() -> string {
+    return $"It is {short()}.\n{contents_text()}"
+}

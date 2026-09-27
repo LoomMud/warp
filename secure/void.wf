@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/void: where removed objects are parked until the destruct efun
+// lands (OBI-85). Not reachable by any exit.
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "The Void"
+}
+
+pub override fn describe() -> string {
+    return "Nothing. Nothing at all. You should not be here."
+}

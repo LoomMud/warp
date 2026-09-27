@@ -2,28 +2,252 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // /std/object: base of everything in the world.
+//
+// Convention (D-P1.4, docs/std-conventions.md): static content lives in
+// overridable functions (short(), long(), ids()), never in create()-time
+// setters, because create() is not re-run when a program is updated.
+// Variables hold per-instance mutable state only.
 
-var name: string = "object"
+// Per-instance name override (players, renamed clones). Empty = use short().
+var name: string = ""
 
-// Apply: runs once after load/clone. Not re-run on update.
+// Set by remove(); a removed object is out of play (see remove()).
+var removed: bool = false
+
+// Apply: runs once after load/clone. Never re-run on update.
 fn create() {
 }
+
+// ---- identity (static content: override these) --------------------------
+
+// One-line description, e.g. "a rusty dagger".
+pub fn short() -> string {
+    return "a thing"
+}
+
+// Full description shown by `look at`.
+pub fn long() -> string {
+    return $"You see nothing special about {short()}."
+}
+
+// Words this object answers to (`get dagger`, `kill goblin`).
+pub fn ids() -> [string] {
+    return []
+}
+
+// ---- identity (per-instance) ----------------------------------------------
 
 pub fn set_name(new_name: string) {
     name = new_name
 }
 
 pub fn query_name() -> string {
-    return name
+    if name != "" {
+        return name
+    }
+    return short()
 }
 
-// One-line description used in room listings.
-pub fn short() -> string {
-    return name
+// True if `word` names this object.
+pub fn id(word: string) -> bool {
+    let w = lower_case(word)
+    if name != "" and w == lower_case(name) {
+        return true
+    }
+    return w in ids()
 }
 
-// Whether `look` lists this object. Players override this so that
-// disconnected players (Phase 0 has no destruct) are not shown.
+// Whether `look` lists this object.
 pub fn visible() -> bool {
+    return not removed
+}
+
+// Line used in room listings.
+pub fn in_room() -> string {
+    return $"{capitalize(short())} is here."
+}
+
+pub fn is_living() -> bool {
+    return false
+}
+
+pub fn is_player() -> bool {
+    return false
+}
+
+pub fn is_weapon() -> bool {
+    return false
+}
+
+pub fn is_armour() -> bool {
+    return false
+}
+
+// Whether `get` may pick this up.
+pub fn gettable() -> bool {
+    return false
+}
+
+pub fn weight() -> int {
+    return 0
+}
+
+// ---- movement -----------------------------------------------------------
+
+// Move this object into `dest`. move_to() only ever moves self, so other
+// objects move things by calling ob.move(dest).
+pub fn move(dest: object) -> bool {
+    if removed {
+        return false
+    }
+    move_to(dest)
     return true
+}
+
+// Take this object out of play. Until the destruct efun lands (OBI-85) the
+// object is parked in /secure/void and flagged; afterwards this becomes
+// destruct(self()). Everything that takes objects out of play goes through
+// here, so the switch is one line.
+pub fn remove() {
+    if removed {
+        return
+    }
+    removed = true
+    for ob in inventory(self()) {
+        if ob.is_player() {
+            ob.move(load_object("/domains/start/hall"))
+        } else {
+            ob.remove()
+        }
+    }
+    move_to(load_object("/secure/void"))
+}
+
+pub fn is_removed() -> bool {
+    return removed
+}
+
+// Send one line of text to this object's connection (no-op if none).
+pub fn message(text: string) {
+    send(self(), $"{text}\n")
+}
+
+// ---- string helpers (no simul-efuns in Weft; inherited by everything) ---
+
+fn lower_case(s: string) -> string {
+    let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    let lower = "abcdefghijklmnopqrstuvwxyz"
+    var out = ""
+    var i = 0
+    while i < len(s) {
+        let ch = s[i]
+        var j = 0
+        var mapped = ch
+        while j < 26 {
+            if upper[j] == ch {
+                mapped = lower[j]
+                j = 26
+            }
+            j += 1
+        }
+        out += mapped
+        i += 1
+    }
+    return out
+}
+
+fn capitalize(s: string) -> string {
+    if len(s) == 0 {
+        return s
+    }
+    let lower = "abcdefghijklmnopqrstuvwxyz"
+    let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    var first = s[0]
+    var j = 0
+    while j < 26 {
+        if lower[j] == first {
+            first = upper[j]
+            j = 26
+        }
+        j += 1
+    }
+    var out = first
+    var i = 1
+    while i < len(s) {
+        out += s[i]
+        i += 1
+    }
+    return out
+}
+
+// Non-empty words of `s`, split on spaces.
+fn words(s: string) -> [string] {
+    var out: [string] = []
+    for w in split(s, " ") {
+        if w != "" {
+            out += [w]
+        }
+    }
+    return out
+}
+
+// Words from index `from` on, joined by single spaces.
+fn join_from(ws: [string], from: int) -> string {
+    var out = ""
+    var i = from
+    while i < len(ws) {
+        if out != "" {
+            out += " "
+        }
+        out += ws[i]
+        i += 1
+    }
+    return out
+}
+
+// Decimal integer, or null. Replaced by the to_int efun once OBI-85 lands.
+fn parse_int(s: string) -> int? {
+    let t = trim(s)
+    if t == "" {
+        return null
+    }
+    let digits = "0123456789"
+    var neg = false
+    var i = 0
+    if t[0] == "-" {
+        neg = true
+        i = 1
+        if len(t) == 1 {
+            return null
+        }
+    }
+    var n = 0
+    while i < len(t) {
+        var d = -1
+        var j = 0
+        while j < 10 {
+            if digits[j] == t[i] {
+                d = j
+                j = 10
+            }
+            j += 1
+        }
+        if d < 0 or n > 100_000_000_000_000 {
+            return null
+        }
+        n = n * 10 + d
+        i += 1
+    }
+    if neg {
+        return -n
+    }
+    return n
+}
+
+// "1 coin", "3 coins".
+fn plural_s(n: int, word: string) -> string {
+    if n == 1 {
+        return $"{n} {word}"
+    }
+    return $"{n} {word}s"
 }

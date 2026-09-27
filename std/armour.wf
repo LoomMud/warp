@@ -1,0 +1,31 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/armour: a wearable item that adds to armour class. One per slot().
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a piece of armour"
+}
+
+pub override fn ids() -> [string] {
+    return ["armour", "armor"]
+}
+
+pub override fn weight() -> int {
+    return 5
+}
+
+pub override fn is_armour() -> bool {
+    return true
+}
+
+// "body", "head", "hands", "feet", "shield".
+pub fn slot() -> string {
+    return "body"
+}
+
+pub fn armour_class() -> int {
+    return 1
+}

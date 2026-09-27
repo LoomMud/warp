@@ -1,0 +1,114 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/login: one clone per connection until the player is in the game.
+// A small state machine: name -> (new character: confirm -> class) or
+// (existing link-dead character: reconnect).
+//
+// Alpha limitation: there are no passwords until the account efuns land
+// (OBI-85). Until then a character that is connected cannot be taken over,
+// and a link-dead one is reconnected by name. Part 2 of OBI-38 replaces the
+// "name" step with account_login()/account_create().
+
+inherit /std/object
+
+var state: string = "name"
+var wanted: string = ""
+
+pub fn classes() -> [string] {
+    return ["warrior", "rogue"]
+}
+
+pub override fn short() -> string {
+    return "a login"
+}
+
+fn ask(text: string) {
+    send(self(), text)
+}
+
+fn logon() {
+    message("")
+    message("  ~ O B E R F I E L D ~")
+    message("  An internal alpha of the Warp mudlib on the Loom driver.")
+    message("")
+    ask("By what name do you wish to be known? ")
+}
+
+pub fn valid_name(n: string) -> bool {
+    if len(n) < 3 or len(n) > 16 {
+        return false
+    }
+    let letters = "abcdefghijklmnopqrstuvwxyz"
+    var i = 0
+    while i < len(n) {
+        if not (n[i] in letters) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+fn process_input(line: string) {
+    let input = lower_case(trim(line))
+    if state == "name" {
+        got_name(input)
+    } else if state == "confirm" {
+        got_confirm(input)
+    } else if state == "class" {
+        got_class(input)
+    }
+}
+
+fn got_name(n: string) {
+    if not valid_name(n) {
+        message("Names are 3 to 16 letters, a to z.")
+        ask("By what name do you wish to be known? ")
+        return
+    }
+    let existing = load_object("/secure/userd").find(n)
+    if existing != null {
+        if existing.is_connected() as bool {
+            message("That character is already playing.")
+            ask("By what name do you wish to be known? ")
+            return
+        }
+        load_object("/secure/master").login_complete(self(), existing, true)
+        return
+    }
+    wanted = n
+    state = "confirm"
+    ask($"Create a new character called {capitalize(n)}? (yes/no) ")
+}
+
+fn got_confirm(answer: string) {
+    if answer == "y" or answer == "yes" {
+        state = "class"
+        ask($"Choose a class ({join(classes(), ", ")}): ")
+        return
+    }
+    state = "name"
+    ask("By what name do you wish to be known? ")
+}
+
+fn got_class(c: string) {
+    if not (c in classes()) {
+        ask($"Choose a class ({join(classes(), ", ")}): ")
+        return
+    }
+    // Someone may have taken the name while we were choosing.
+    if load_object("/secure/userd").find(wanted) != null {
+        message("That name was just taken.")
+        state = "name"
+        ask("By what name do you wish to be known? ")
+        return
+    }
+    let player = clone_object("/std/player")
+    player.setup_character(wanted, c)
+    load_object("/secure/master").login_complete(self(), player, false)
+}
+
+fn net_dead() {
+    remove()
+}

@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/combatd: the mudlib clock and the Diku "violence pulse". It is the
+// only object with a heartbeat: every world tick (100 ms) it advances the
+// clock, and every round_ticks() ticks it runs one combat round for every
+// enlisted fighter, in enlistment order. A fighter whose round throws is
+// dropped from the round list and the error is not fatal to the others.
+
+var clock: int = 0
+var fighters: [object] = []
+var rounds: int = 0
+
+// World ticks per combat round (2 s).
+pub fn round_ticks() -> int {
+    return 20
+}
+
+fn create() {
+    set_heartbeat(true)
+}
+
+fn heartbeat() {
+    clock += 1
+    if clock % round_ticks() == 0 {
+        run_round()
+    }
+}
+
+pub fn now() -> int {
+    return clock
+}
+
+pub fn enlist(ob: object) {
+    if not (ob in fighters) {
+        fighters += [ob]
+    }
+}
+
+pub fn fighter_count() -> int {
+    return len(fighters)
+}
+
+pub fn query_rounds() -> int {
+    return rounds
+}
+
+// One round. Public so tests and builders can force a round.
+pub fn run_round() {
+    rounds += 1
+    var still: [object] = []
+    for f in fighters {
+        var keep = false
+        try {
+            if not f.is_removed() {
+                keep = f.combat_round() as bool
+            }
+        } catch e {
+            keep = false
+        }
+        if keep {
+            still += [f]
+        }
+    }
+    // Fighters enlisted during this round were appended to `fighters`.
+    for f in fighters {
+        if not (f in still) and f.query_fighting() != null and not f.is_removed() {
+            still += [f]
+        }
+    }
+    fighters = still
+}
