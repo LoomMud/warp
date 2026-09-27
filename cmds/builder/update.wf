@@ -1,0 +1,51 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// update [<path>|here]: builder command (tier 2+)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "update [<path>|here]: recompile a program in place; live objects keep their state (see docs/std-conventions.md)."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    var path = normalise(args)
+    if path == "" or path == "here" {
+        let env = environment(me)
+        if env == null {
+            me.message("Update what?")
+            return true
+        }
+        path = split(object_name(env), "#")[0]
+    }
+    let err = compile_object(path)
+    if err == null {
+        me.message($"{path}: Updated.")
+    } else {
+        me.message($"{path}: update failed.\n{err}")
+    }
+    return true
+}
+
+// Accept "/std/item", "/std/item.wf" and "std/item".
+fn normalise(arg: string) -> string {
+    var p = trim(arg)
+    if p == "" or p == "here" {
+        return p
+    }
+    if p[0] != "/" {
+        p = "/" + p
+    }
+    let n = len(p)
+    if n > 3 and p[n - 3] == "." and p[n - 2] == "w" and p[n - 1] == "f" {
+        var out = ""
+        var i = 0
+        while i < n - 3 {
+            out += p[i]
+            i += 1
+        }
+        return out
+    }
+    return p
+}

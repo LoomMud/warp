@@ -1,0 +1,16 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// quit
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "quit: leave the game. Your character stays behind, link-dead, until you log back in."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    me.message("Goodbye.")
+    disconnect(me)
+    return true
+}

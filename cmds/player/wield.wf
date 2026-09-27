@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// wield <weapon>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "wield <weapon>: ready a weapon you are carrying."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ob = find_carried(me, args)
+    if ob == null {
+        me.message("You are not carrying that.")
+        return true
+    }
+    let err = me.wield(ob) as string
+    if err != "" {
+        me.message(err)
+        return true
+    }
+    me.message($"You wield {ob.short()}.")
+    environment(me)?.tell($"{me.cap_name()} wields {ob.short()}.", me)
+    return true
+}

@@ -1,0 +1,37 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// reset [zone]: builder command (tier 2+)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "reset: run this room's reset now. reset zone: reset this room's whole zone."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if env == null {
+        me.message("You are nowhere.")
+        return true
+    }
+    if trim(args) == "zone" {
+        let parts = split(object_name(env), "/")
+        if len(parts) < 3 {
+            me.message("This room is not in a zone.")
+            return true
+        }
+        let zone = $"/{parts[1]}/{parts[2]}/zone"
+        try {
+            load_object(zone).reset()
+        } catch e {
+            me.message($"No zone at {zone}.")
+            return true
+        }
+        me.message($"{zone}: reset.")
+        return true
+    }
+    env.reset()
+    me.message("Room reset.")
+    return true
+}

@@ -1,0 +1,23 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// go <direction>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "go <direction>: walk through an exit (or just type the direction)."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    if args == "" {
+        me.message("Go where?")
+        return true
+    }
+    let al = me.aliases() as {string: string}
+    let dir = al[args] ?? args
+    if me.go_dir(dir) as bool {
+        load_object("/cmds/player/look").main(me, "")
+    }
+    return true
+}

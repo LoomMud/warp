@@ -1,0 +1,40 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// kill <living>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "kill <living>: start a fight. Combat runs in rounds until someone dies or flees."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if env == null or args == "" {
+        me.message("Kill whom?")
+        return true
+    }
+    let target = env.find_here(args, me)
+    if target == null {
+        me.message($"You see no {args} here.")
+        return true
+    }
+    if target == me.query_fighting() {
+        me.message("You are doing your best!")
+        return true
+    }
+    if target.is_player() as bool {
+        me.message("Player killing is not allowed in the alpha.")
+        return true
+    }
+    let err = me.attack(target) as string
+    if err != "" {
+        me.message(err)
+        return true
+    }
+    me.message($"You attack {target.the_name()}!")
+    target.message($"{me.cap_name()} attacks you!")
+    env.tell_except($"{me.cap_name()} attacks {target.the_name()}!", [me, target])
+    return true
+}

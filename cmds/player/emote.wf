@@ -1,0 +1,21 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// emote <action>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "emote <action>: act out something (emote smiles -> Aragorn smiles)."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    if args == "" {
+        me.message("Emote what?")
+        return true
+    }
+    let text = $"{me.cap_name()} {args}"
+    me.message(text)
+    environment(me)?.tell(text, me)
+    return true
+}

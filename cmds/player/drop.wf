@@ -1,0 +1,46 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// drop <item> | drop all
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "drop <item> | drop all: put things down."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if env == null or args == "" {
+        me.message("Drop what?")
+        return true
+    }
+    if args == "all" {
+        var n = 0
+        for ob in inventory(me) {
+            put_down(me, ob, env)
+            n += 1
+        }
+        if n == 0 {
+            me.message("You are not carrying anything.")
+        }
+        return true
+    }
+    let ob = find_carried(me, args)
+    if ob == null {
+        me.message($"You are not carrying any {args}.")
+        return true
+    }
+    put_down(me, ob, env)
+    return true
+}
+
+fn put_down(me: object, ob: object, env: object) {
+    if ob == me.query_wielded() {
+        me.unwield()
+    }
+    me.remove_worn(ob)
+    ob.move(env)
+    me.message($"You drop {ob.short()}.")
+    env.tell($"{me.cap_name()} drops {ob.short()}.", me)
+}

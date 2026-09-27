@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// who
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "who: list the players online."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let list = load_object("/secure/userd").online() as [object]
+    var text = "Players online:"
+    for p in list {
+        var tag = ""
+        if (p.query_tier() as int) > 0 {
+            tag = " [staff]"
+        }
+        text += $"\n  {p.cap_name()} the {p.query_class()} (level {p.query_level()}){tag}"
+    }
+    text += $"\n{plural_s(len(list), "player")} online."
+    me.message(text)
+    return true
+}

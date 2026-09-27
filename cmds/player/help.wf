@@ -1,0 +1,28 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// help [<command>]
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "help [<command>]: list commands, or explain one."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let cmdd = load_object("/secure/cmdd")
+    let tier = me.query_tier() as int
+    if args != "" {
+        let path = cmdd.find(args, tier)
+        if path == null {
+            me.message($"There is no command called {args}.")
+            return true
+        }
+        me.message(load_object(path as string).help() as string)
+        return true
+    }
+    let verbs = cmdd.verbs(tier) as [string]
+    me.message($"Commands: {join(verbs, ", ")}.")
+    me.message("Walk by typing a direction (north, n, ...). `help <command>` for details.")
+    return true
+}

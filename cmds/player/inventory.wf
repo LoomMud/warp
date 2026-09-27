@@ -1,0 +1,30 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// inventory (i)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "inventory (i): list what you are carrying."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let inv = inventory(me)
+    if len(inv) == 0 {
+        me.message("You are carrying nothing.")
+        return true
+    }
+    var text = "You are carrying:"
+    for ob in inv {
+        var tag = ""
+        if ob == me.query_wielded() {
+            tag = " (wielded)"
+        } else if me.is_equipped(ob) as bool {
+            tag = " (worn)"
+        }
+        text += $"\n  {ob.short()}{tag}"
+    }
+    me.message(text)
+    return true
+}

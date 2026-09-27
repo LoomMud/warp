@@ -1,0 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// goto <room path>|<player>: builder command (tier 2+)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "goto <room path> | goto <player>: teleport."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    var where = trim(args)
+    if where == "" {
+        me.message("Goto where?")
+        return true
+    }
+    var dest: object? = null
+    let who = load_object("/secure/userd").find(lower_case(where))
+    if who != null {
+        dest = environment(who)
+    } else {
+        if where[0] != "/" {
+            where = "/" + where
+        }
+        try {
+            dest = load_object(where)
+        } catch e {
+            me.message($"No such room: {where}")
+            return true
+        }
+    }
+    if dest == null {
+        me.message("They are nowhere.")
+        return true
+    }
+    let d = dest ?? me
+    environment(me)?.tell($"{me.cap_name()} vanishes.", me)
+    me.stop_fighting()
+    me.move(d)
+    d.tell($"{me.cap_name()} appears.", me)
+    load_object("/cmds/player/look").main(me, "")
+    return true
+}
