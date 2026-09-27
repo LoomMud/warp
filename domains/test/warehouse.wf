@@ -48,3 +48,13 @@ pub fn version_sum() -> int {
     }
     return sum
 }
+
+// Sum of query_condition() over the contents: unchanged by a correct
+// v1 -> v2 upgrade (505000 for the standard 10k fill).
+pub fn condition_sum() -> int {
+    var sum = 0
+    for ob in inventory(self()) {
+        sum += ob.query_condition() as int
+    }
+    return sum
+}

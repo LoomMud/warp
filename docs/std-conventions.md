@@ -41,9 +41,11 @@ pub override fn short() -> string {
 ```
 
 `loom check` warns when it sees a `set_*` call with only literal arguments
-inside `create()` (lint `W0300 literal-setter-in-create`,
-OBI-86, S4b). If you really mean it, put
-`// loom:allow(literal-setter-in-create)` on the line before the call.
+inside `create()` (`W0900 literal-setter-in-create`). Warp's CI runs
+`loom check --deny-warnings`, so the warning fails the build. If you really
+mean it, for example `set_heartbeat(true)` in `/secure/combatd`, which is a
+registration and not content, put `// loom:allow(literal-setter-in-create)`
+on the line before the call.
 
 Per-instance *identity* that is genuinely per instance (a player's name, a
 corpse's "of whom") is mutable state, so it is set once through a setter after
@@ -60,12 +62,14 @@ When you change the **variables** of a program (rename, split or retype one),
 existing objects need their state migrated:
 
 1. Bump `schema_version()`. Every `/std/item` descendant answers it.
-2. Add `upgrade(from_version: int, old: {string: any})`. The driver (V4,
-   OBI-34) calls it once per live object,
-   inside an implicit `atomic`, with the old values of removed or changed
-   variables in `old`. Assign the new variables from them. If `upgrade()`
-   throws, that object is rolled back and the failure is reported. Other
-   objects are not affected.
+2. Add `upgrade(from_version: int, old: {string: any})`. The driver (V4)
+   calls it once per live object, inside an implicit `atomic`, when that
+   object is next touched (or by `upgrade_all`). `old` holds the old values
+   of removed or changed variables. Assign the new variables from them.
+   **Key on the contents of `old`, not on `from_version`:** `from_version` is
+   the program's compile count (every `update` bumps it), not your
+   `schema_version()`. If `upgrade()` throws, that object is rolled back and
+   the failure is reported. Other objects are not affected.
 3. Variables whose name and type did not change are carried over
    automatically. New variables get their initialiser. You only migrate what
    changed.
@@ -73,66 +77,64 @@ existing objects need their state migrated:
 `fixtures/item10k/item_v2.wf` is the worked example (it is also the E1.2 test
 input): v1 `/std/item` has `condition: int` (0–100). v2 replaces it with
 `durability`/`max_durability`, and `upgrade()` converts one to the other.
-
-Until V4 lands, `update` keeps Phase 0 semantics: matching variables are kept,
-new ones get their initialiser, and `upgrade()` is not called yet.
+`tests/smoke.py item10k` runs that change live on 10,000 clones.
 
 ## Other `/std` rules
 
 - **Moving things:** the `move_to()` efun only moves `self`. To move another
   object, call `ob.move(dest)` (in `/std/object`).
-- **Taking things out of play:** always call `ob.remove()`, never anything
-  lower-level. Today it parks the object in `/secure/void`. Once the
-  `destruct` efun lands (OBI-85, S4a) it
-  becomes `destruct(self())`. Everything already goes through this one
-  function, so that is a one-line change.
+- **Taking things out of play:** always call `ob.remove()`, not `destruct()`.
+  It moves players inside to the start room, removes everything else
+  inside, then destructs. Test a stored reference with `destructed(ob)`
+  before you use it (`environment(dead)` is `null`, and calling a
+  function on a dead object is an error).
 - **Text output:** `ob.message(text)` sends one line (adds `\n`). Rooms have
   `tell(text, exclude)` and `tell_except(text, [objects])`. `send()` is
   verbatim (D-P1.2), so use it directly only for prompts.
-- **Randomness:** `load_object("/secure/rng").roll(n)` gives `[0, n)`. It
-  becomes the `random()` efun with S4a. Call sites don't change.
-- **The clock:** `/secure/combatd` `now()` counts world ticks (100 ms).
-  Hit points regenerate lazily against it, so idle livings cost nothing.
-  `combatd` is the only object with a heartbeat. Everything else uses
-  `call_out`.
+- **Randomness:** the `random(n)` efun (`[0, n)`).
+- **Time:** the driver ticks every 100 ms. `call_out` delays are in those
+  ticks. Heartbeats fire every 20 ticks (2 s). `/secure/combatd` is the
+  only object with a heartbeat: each one is a combat pulse, and `now()`
+  counts pulses. Hit points regenerate lazily against `now()`, so idle
+  livings cost nothing.
 - **Late-bound calls return `any`.** Cast at the call site
   (`ob.query_hp() as int`) so the checker can type the rest.
 - **Late-bound calls need `pub`.** Every function another object calls must
   be `pub`. Keep functions that act *as* an object private
   (`/std/player` `run_command` is private, so no other object can make a
   player run a command).
-- **Weft today:** no `break`, slices, `match`, closures, `struct`/`enum` or
-  `const` at runtime yet. `/std/object` has the string helpers
-  (`lower_case`, `capitalize`, `words`, `join_from`, `parse_int`).
+- **Weft today:** no `break`, slices, `match`, closures or `struct`/`enum`
+  yet. The string efuns are `lower`, `to_int`, `trim`, `split` and `join`,
+  and `/std/object` adds `capitalize`, `words` and `join_from`.
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `/secure/master` | boot (clock, zones), `connect()`, `login_complete()` |
-| `/secure/login` | one clone per connecting user: name, character creation |
+| `/secure/login` | one clone per connecting user: account login/creation (R2), character creation |
 | `/secure/userd` | name → player object (connected or link-dead) |
 | `/secure/staff` | alpha staff tiers (interim, until S2 `/secure/roles`) |
 | `/secure/cmdd` | verb → command program tables |
-| `/secure/combatd` | world clock, Diku combat rounds (2 s) |
-| `/secure/rng` | randomness |
-| `/secure/void` | where removed objects are parked (until `destruct`) |
+| `/secure/combatd` | combat pulse clock, Diku combat rounds (2 s) |
 | `/std/object` → `item` → `container`, `weapon`, `armour`, `corpse` | things |
 | `/std/object` → `living` → `player`, `npc` | creatures |
-| `/std/object` → `room`, `zone`, `command` | places, resets, verbs |
+| `/std/object` → `room`, `zone`, `command`, `editor` | places, resets, verbs, `ed` sessions |
 | `/cmds/player/*`, `/cmds/builder/*` | one program per verb |
 | `/domains/<area>/zone` + rooms, `npc/`, `obj/` | content |
 | `/domains/test/warehouse` | the E1.2 10k-clone fixture room |
 
 ## Not yet (alpha limits)
 
-- **No passwords** until the account efuns land (S4a,
-  OBI-85). Logging in by name reconnects a
-  link-dead character, and a connected character cannot be taken over.
-  Staging does not open to anyone before this is closed.
-- **No saving.** Characters exist from creation until driver restart.
-- **Tiers are advisory** until S1/S2 (OBI-35,
-  OBI-36) enforce them in the driver.
-  Builder commands check `query_tier() >= 2` (looked up by name in
-  `/secure/staff`, never stored on the player).
-- **`ed`-lite** needs `read_file`/`write_file` (S4a) and ships with part 2.
+- **One account, one character, one name.** Passwords are checked by the
+  driver against R2 accounts (Argon2, off the world thread), but characters
+  are **not saved**. After a driver restart, logging in to an existing
+  account asks for a class again.
+- **Passwords echo.** The login does not negotiate telnet `WILL ECHO` yet.
+- **Tiers are advisory** until S1/S2 (OBI-35, OBI-36) enforce them in the
+  driver. Builder commands check `query_tier() >= 2`, looked up by name in
+  `/secure/staff` and never stored on the player. `ed` allows tier 2–3
+  writes under `/domains/` and `/builders/<name>/`, and tier 4 anywhere
+  except `/secure/`. The driver confines every path to the mudlib root.
+- **`ed` edits live files.** On staging they are discarded on the next
+  `WARP_REF` bump (D-P1.11).

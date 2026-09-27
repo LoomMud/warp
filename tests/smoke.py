@@ -8,20 +8,23 @@
 #
 # Boots the driver on a free port with this checkout as the mudlib, then runs
 # scripted telnet sessions and checks their output. Combat and resets need
-# the world tick (NetEvent::Tick, OBI-82); scenarios that need it are
-# skipped with a note unless LOOM_HAS_TICK=1.
+# the world tick (NetEvent::Tick, OBI-82).
 # Exit status 0 = every scenario that ran passed.
 
 import os
 import re
+import shutil
 import socket
+import tempfile
 import subprocess
 import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOOM = os.environ.get("LOOM_CLI", "loom-cli")
-HAS_TICK = os.environ.get("LOOM_HAS_TICK") == "1"
+# Combat and resets need the world tick (NetEvent::Tick, OBI-82), which loom
+# main has; LOOM_HAS_TICK=0 skips those scenarios on an older driver.
+HAS_TICK = os.environ.get("LOOM_HAS_TICK", "1") == "1"
 
 
 def free_port():
@@ -33,12 +36,13 @@ def free_port():
 
 
 class Server:
-    def __init__(self):
+    def __init__(self, root=ROOT):
+        self.root = root
         self.port = free_port()
         env = dict(os.environ, LOOM_TELNET_ADDR=f"127.0.0.1:{self.port}")
         env.setdefault("RUST_LOG", "warn")
         self.proc = subprocess.Popen(
-            [LOOM, "serve", "--mudlib", ROOT],
+            [LOOM, "serve", "--mudlib", root],
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -110,14 +114,26 @@ class Client:
         self.sock.close()
 
 
-def login(server, name, cls="warrior"):
+PASSWORD = "alpha-pass"
+
+
+def login(server, name, cls="warrior", password=PASSWORD):
+    """Log in as `name`, creating the account and character if needed."""
     c = Client(server, name)
     c.expect(r"By what name")
     c.send(name)
-    m = c.expect(r"Create a new character|You take over")
+    c.expect(r"Password: ")
+    c.send(password)
+    m = c.expect(r"Create a new character|You take over|Choose a class", timeout=15)
     if m.group(0).startswith("Create"):
         c.send("yes")
-        c.expect(r"Choose a class")
+        c.expect(r"Choose a password")
+        c.send(password)
+        c.expect(r"Confirm password")
+        c.send(password)
+        c.expect(r"Choose a class", timeout=15)
+        c.send(cls)
+    elif m.group(0).startswith("Choose"):
         c.send(cls)
     c.expect(r"<\d+/\d+hp> ")
     return c
@@ -152,18 +168,38 @@ def scenario_basics(server):
     a.cmd("score", r"Alice the warrior, level 1")
     b.cmd("quit", r"Goodbye")
     a.expect(r"Bobby has lost their link")
-    # Reconnect by name picks up the link-dead body.
+    # A wrong password is refused, and gets the create offer (which the
+    # account layer then refuses: the name exists).
+    x = Client(server, "intruder")
+    x.expect(r"By what name")
+    x.send("bobby")
+    x.expect(r"Password: ")
+    x.send("not-the-password")
+    x.expect(r"Wrong password, or no such character", timeout=15)
+    x.expect(r"Create a new character")
+    x.send("yes")
+    x.expect(r"Choose a password")
+    x.send("another-pass")
+    x.expect(r"Confirm password")
+    x.send("another-pass")
+    x.expect(r"That name was just taken", timeout=15)
+    x.close()
+    # The right password reconnects to the link-dead body.
     b2 = Client(server, "bobby2")
     b2.expect(r"By what name")
     b2.send("bobby")
-    b2.expect(r"You take over your body again")
+    b2.expect(r"Password: ")
+    b2.send(PASSWORD)
+    b2.expect(r"You take over your body again", timeout=15)
     b2.expect(r"<\d+/\d+hp> ")
-    # A connected character can't be taken over.
-    x = Client(server, "intruder")
-    x.expect(r"By what name")
-    x.send("alice")
-    x.expect(r"already playing")
-    for c in (a, b2, x):
+    # A connected character can't be taken over, even with its password.
+    y = Client(server, "intruder2")
+    y.expect(r"By what name")
+    y.send("alice")
+    y.expect(r"Password: ")
+    y.send(PASSWORD)
+    y.expect(r"already playing", timeout=15)
+    for c in (a, b2, y):
         c.close()
 
 
@@ -206,6 +242,49 @@ def scenario_combat(server):
     p.close()
 
 
+def scenario_ed(server):
+    """ed-lite: write a room file, update it, goto it."""
+    w = login(server, "builder")
+    w.cmd("ed /secure/master.wf", r"You may not edit /secure/master\.wf")
+    w.buf = ""
+    w.send("ed /domains/test/scratch")
+    w.expect(r"scratch\.wf: new file.*:", timeout=5)
+    lines = [
+        "a",
+        "// SPDX-FileCopyrightText: 2026 Oberfield",
+        "// SPDX-License-Identifier: AGPL-3.0-only",
+        "inherit /std/room",
+        "pub override fn short() -> string {",
+        '    return "A Scratch Room"',
+        "}",
+        ".",
+    ]
+    for l in lines:
+        w.send(l)
+    w.buf = ""
+    w.send("p 3")
+    w.expect(r"3\tinherit /std/room")
+    w.send("c 5     return \"An Edited Room\"")
+    w.send("p 5")
+    w.expect(r'5\t    return "An Edited Room"')
+    w.send("wq")
+    w.expect(r"6 lines written.*Left the editor.*<\d+/\d+hp> ", timeout=5)
+    w.cmd("update /domains/test/scratch", r"Updated\.")
+    w.cmd("goto /domains/test/scratch", r"An Edited Room")
+    # Edit again: q refuses with unsaved changes, q! discards.
+    w.buf = ""
+    w.send("ed /domains/test/scratch.wf")
+    w.expect(r"6 lines")
+    w.send("d 6")
+    w.expect(r"Deleted 1 line")
+    w.send("q")
+    w.expect(r"Unsaved changes")
+    w.send("q!")
+    w.expect(r"Left the editor")
+    w.close()
+    os.remove(os.path.join(ROOT, "domains", "test", "scratch.wf"))
+
+
 def scenario_upgrade_live(server):
     """Live `update` of /std/room keeps players connected (Phase 0 E0.1 again)."""
     w = login(server, "legolas")
@@ -219,18 +298,29 @@ def scenario_upgrade_live(server):
 
 
 def scenario_item10k(server):
-    """Clone 10k /std/item into the warehouse, then `update /std/item` live
-    (Phase 0 semantics until V4). Checks nobody is disconnected."""
+    """E1.2 fixture end to end: 10k /std/item clones, a same-schema
+    `update /std/item`, then the v1 -> v2 schema change (condition ->
+    durability via upgrade()). Every clone must report v2 with its
+    condition preserved, and nobody is disconnected."""
     w = login(server, "aragorn")
     p = login(server, "watcher")
     for _ in range(10):
         m = w.cmd("fixture item10k fill 1000", r"item10k: (\d+) items\.", timeout=30)
     assert m.group(1) == "10000", m.group(0)
-    w.cmd("fixture item10k status", r"10000 items, version sum 10000\.", timeout=30)
+    ok_v1 = r"10000 items, version sum 10000, condition sum 505000\."
+    w.cmd("fixture item10k status", ok_v1, timeout=30)
     t0 = time.time()
     w.cmd("update /std/item", r"/std/item: Updated\.", timeout=60)
-    print(f"     update /std/item with 10k clones: {time.time() - t0:.2f}s")
-    w.cmd("fixture item10k status", r"10000 items, version sum 10000\.", timeout=30)
+    print(f"     update /std/item (same schema), 10k clones: {time.time() - t0:.2f}s")
+    w.cmd("fixture item10k status", ok_v1, timeout=30)
+    # Swap in v2 on this server's private copy of the mudlib.
+    shutil.copy(os.path.join(server.root, "fixtures", "item10k", "item_v2.wf"),
+                os.path.join(server.root, "std", "item.wf"))
+    t0 = time.time()
+    w.cmd("update /std/item", r"/std/item: Updated\.", timeout=60)
+    print(f"     update /std/item v1 -> v2, 10k clones: {time.time() - t0:.2f}s")
+    w.cmd("fixture item10k status",
+          r"10000 items, version sum 20000, condition sum 505000\.", timeout=60)
     p.cmd("look", r"Entrance Hall")
     w.close()
     p.close()
@@ -240,30 +330,52 @@ SCENARIOS = {
     "basics": (scenario_basics, False),
     "builder": (scenario_builder, False),
     "upgrade_live": (scenario_upgrade_live, False),
+    "ed": (scenario_ed, False),
     "combat": (scenario_combat, True),
-    "item10k": (scenario_item10k, False),
+    "item10k": (scenario_item10k, False),  # runs on a private copy
 }
+
+
+# Scenarios that modify mudlib files get their own server on a scratch copy.
+PRIVATE = {"item10k"}
+
+
+def run(n, server):
+    fn, needs_tick = SCENARIOS[n]
+    if needs_tick and not HAS_TICK:
+        print(f"SKIP {n} (needs the world tick, OBI-82)")
+        return True
+    t0 = time.time()
+    try:
+        fn(server)
+        print(f"ok   {n} ({time.time() - t0:.1f}s)")
+        return True
+    except (AssertionError, EOFError) as e:
+        print(f"FAIL {n}: {e}")
+        return False
 
 
 def main():
     names = sys.argv[1:] or list(SCENARIOS)
-    server = Server()
     failed = 0
-    try:
-        for n in names:
-            fn, needs_tick = SCENARIOS[n]
-            if needs_tick and not HAS_TICK:
-                print(f"SKIP {n} (needs the world tick, OBI-82; set LOOM_HAS_TICK=1)")
-                continue
-            t0 = time.time()
+    shared = [n for n in names if n not in PRIVATE]
+    if shared:
+        server = Server()
+        try:
+            failed += sum(not run(n, server) for n in shared)
+        finally:
+            server.stop()
+    for n in names:
+        if n in PRIVATE:
+            tmp = tempfile.mkdtemp(prefix="warp-smoke-")
+            copy = os.path.join(tmp, "warp")
+            shutil.copytree(ROOT, copy, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            server = Server(copy)
             try:
-                fn(server)
-                print(f"ok   {n} ({time.time() - t0:.1f}s)")
-            except (AssertionError, EOFError) as e:
-                failed += 1
-                print(f"FAIL {n}: {e}")
-    finally:
-        server.stop()
+                failed += not run(n, server)
+            finally:
+                server.stop()
+                shutil.rmtree(tmp)
     sys.exit(1 if failed else 0)
 
 

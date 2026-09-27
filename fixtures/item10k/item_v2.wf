@@ -18,9 +18,12 @@ inherit /std/object
 var durability: int = 1000
 var max_durability: int = 1000
 
-// Apply (V4): migrate v1 state. `old` holds removed/changed variables.
+// Apply (V4): migrate v1 state. `old` holds the variables that were
+// removed or changed type. Key the migration on what `old` contains, not on
+// `from_version`: that is the program's compile count (every `update` bumps
+// it), not schema_version().
 fn upgrade(from_version: int, old: {string: any}) {
-    if from_version < 2 and "condition" in old {
+    if "condition" in old {
         let c = old["condition"] as int
         durability = c * 10
         max_durability = 1000
