@@ -16,7 +16,7 @@ pub override fn main(me: object, args: string) -> bool {
         return true
     }
     var dest: object? = null
-    let who = load_object("/secure/userd").find(lower_case(where))
+    let who = load_object("/secure/userd").find(lower(where))
     if who != null {
         dest = environment(who)
     } else {

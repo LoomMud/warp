@@ -15,7 +15,7 @@ pub override fn main(me: object, args: string) -> bool {
         me.message("Tell whom what?")
         return true
     }
-    let who = load_object("/secure/userd").find(lower_case(ws[0]))
+    let who = load_object("/secure/userd").find(lower(ws[0]))
     if who == null or not (who.is_connected() as bool) {
         me.message("No such player is online.")
         return true

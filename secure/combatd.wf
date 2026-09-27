@@ -1,32 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /secure/combatd: the mudlib clock and the Diku "violence pulse". It is the
-// only object with a heartbeat: every world tick (100 ms) it advances the
-// clock, and every round_ticks() ticks it runs one combat round for every
-// enlisted fighter, in enlistment order. A fighter whose round throws is
-// dropped from the round list and the error is not fatal to the others.
+// /secure/combatd: the mudlib's combat clock, i.e. the Diku "violence
+// pulse". It is the only object with a heartbeat. The driver calls
+// heartbeat() every 2 s (every 20 world ticks, OBI-82), and each heartbeat
+// is one pulse: the clock advances and every enlisted fighter gets one
+// combat round, in enlistment order. A fighter whose round throws is
+// dropped from the round list and the error does not affect the others.
 
 var clock: int = 0
 var fighters: [object] = []
 var rounds: int = 0
 
-// World ticks per combat round (2 s).
-pub fn round_ticks() -> int {
-    return 20
-}
-
 fn create() {
+    // Registration, not static content: the subscription survives upgrades.
+    // loom:allow(literal-setter-in-create)
     set_heartbeat(true)
 }
 
 fn heartbeat() {
     clock += 1
-    if clock % round_ticks() == 0 {
-        run_round()
-    }
+    run_round()
 }
 
+// Pulses (2 s each) since boot. Hit point regeneration is measured in these.
 pub fn now() -> int {
     return clock
 }
@@ -52,7 +49,7 @@ pub fn run_round() {
     for f in fighters {
         var keep = false
         try {
-            if not f.is_removed() {
+            if not destructed(f) {
                 keep = f.combat_round() as bool
             }
         } catch e {
@@ -64,7 +61,7 @@ pub fn run_round() {
     }
     // Fighters enlisted during this round were appended to `fighters`.
     for f in fighters {
-        if not (f in still) and f.query_fighting() != null and not f.is_removed() {
+        if not destructed(f) and not (f in still) and f.query_fighting() != null {
             still += [f]
         }
     }

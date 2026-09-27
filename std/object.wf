@@ -11,9 +11,6 @@
 // Per-instance name override (players, renamed clones). Empty = use short().
 var name: string = ""
 
-// Set by remove(); a removed object is out of play (see remove()).
-var removed: bool = false
-
 // Apply: runs once after load/clone. Never re-run on update.
 fn create() {
 }
@@ -50,8 +47,8 @@ pub fn query_name() -> string {
 
 // True if `word` names this object.
 pub fn id(word: string) -> bool {
-    let w = lower_case(word)
-    if name != "" and w == lower_case(name) {
+    let w = lower(word)
+    if name != "" and w == lower(name) {
         return true
     }
     return w in ids()
@@ -59,7 +56,7 @@ pub fn id(word: string) -> bool {
 
 // Whether `look` lists this object.
 pub fn visible() -> bool {
-    return not removed
+    return true
 }
 
 // Line used in room listings.
@@ -97,22 +94,15 @@ pub fn weight() -> int {
 // Move this object into `dest`. move_to() only ever moves self, so other
 // objects move things by calling ob.move(dest).
 pub fn move(dest: object) -> bool {
-    if removed {
-        return false
-    }
     move_to(dest)
     return true
 }
 
-// Take this object out of play. Until the destruct efun lands (OBI-85) the
-// object is parked in /secure/void and flagged; afterwards this becomes
-// destruct(self()). Everything that takes objects out of play goes through
-// here, so the switch is one line.
+// Take this object out of play: players inside are moved to the start
+// room, everything else inside is removed too, then the object is
+// destructed. Always use this (not destruct() directly) so containers
+// clean up their contents. Test references with destructed(ob).
 pub fn remove() {
-    if removed {
-        return
-    }
-    removed = true
     for ob in inventory(self()) {
         if ob.is_player() {
             ob.move(load_object("/domains/start/hall"))
@@ -120,11 +110,7 @@ pub fn remove() {
             ob.remove()
         }
     }
-    move_to(load_object("/secure/void"))
-}
-
-pub fn is_removed() -> bool {
-    return removed
+    destruct(self())
 }
 
 // Send one line of text to this object's connection (no-op if none).
@@ -133,28 +119,7 @@ pub fn message(text: string) {
 }
 
 // ---- string helpers (no simul-efuns in Weft; inherited by everything) ---
-
-fn lower_case(s: string) -> string {
-    let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    let lower = "abcdefghijklmnopqrstuvwxyz"
-    var out = ""
-    var i = 0
-    while i < len(s) {
-        let ch = s[i]
-        var j = 0
-        var mapped = ch
-        while j < 26 {
-            if upper[j] == ch {
-                mapped = lower[j]
-                j = 26
-            }
-            j += 1
-        }
-        out += mapped
-        i += 1
-    }
-    return out
-}
+// Efuns cover the rest: lower(), to_int(), trim(), split(), join().
 
 fn capitalize(s: string) -> string {
     if len(s) == 0 {
@@ -203,45 +168,6 @@ fn join_from(ws: [string], from: int) -> string {
         i += 1
     }
     return out
-}
-
-// Decimal integer, or null. Replaced by the to_int efun once OBI-85 lands.
-fn parse_int(s: string) -> int? {
-    let t = trim(s)
-    if t == "" {
-        return null
-    }
-    let digits = "0123456789"
-    var neg = false
-    var i = 0
-    if t[0] == "-" {
-        neg = true
-        i = 1
-        if len(t) == 1 {
-            return null
-        }
-    }
-    var n = 0
-    while i < len(t) {
-        var d = -1
-        var j = 0
-        while j < 10 {
-            if digits[j] == t[i] {
-                d = j
-                j = 10
-            }
-            j += 1
-        }
-        if d < 0 or n > 100_000_000_000_000 {
-            return null
-        }
-        n = n * 10 + d
-        i += 1
-    }
-    if neg {
-        return -n
-    }
-    return n
 }
 
 // "1 coin", "3 coins".
