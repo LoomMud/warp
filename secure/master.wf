@@ -46,3 +46,31 @@ pub fn login_complete(login: object, player: object, reconnect: bool) {
     player.enter_world(reconnect)
     login.remove()
 }
+
+// ---- Security policy applies (loom OBI-35, S1 stack-based check) ----------
+// The driver fails closed: with no apply, every P1+ efun (update's
+// compile_object, ed's write_file, login's account_*, ...) and every
+// read_file is denied for non-root code. Phase 0 policy is allow-all, the
+// same as the driver's pre-S1 stub; real tiers (builder/domain/admin) and
+// per-path confinement arrive with S2 (loom OBI-36). Results must depend
+// only on the arguments (the driver caches them), never on `ob`.
+
+fn valid_efun(name: string, class: int, ob: object) -> bool {
+    return true
+}
+
+fn valid_compile(path: string, ob: object) -> bool {
+    return true
+}
+
+fn valid_read(path: string, ob: object, op: string) -> bool {
+    return true
+}
+
+fn valid_write(path: string, ob: object, op: string) -> bool {
+    return true
+}
+
+fn valid_bind(ob: object, target: object) -> bool {
+    return true
+}
