@@ -11,6 +11,8 @@ inherit /std/living
 
 var connected: bool = false
 var class_name: string = "adventurer"
+// Active `ed` session (/std/editor clone), if any.
+var editor: object? = null
 var commands_run: int = 0
 
 // ---- static content (override) -----------------------------------------
@@ -28,7 +30,7 @@ pub override fn long() -> string {
 }
 
 pub override fn visible() -> bool {
-    return connected and not removed
+    return connected
 }
 
 // Input shorthands. A function, not a variable, so `update` changes it.
@@ -133,6 +135,24 @@ pub fn write(text: string) {
     message(text)
 }
 
+// Start an `ed` session. Only the `ed` command (acting for this player's
+// own input, so this_player() is us) may do this.
+pub fn start_editor(ed: object) -> bool {
+    if this_player() != self() or editor != null {
+        return false
+    }
+    editor = ed
+    return true
+}
+
+pub fn editor_prompt() -> string {
+    let ed = editor
+    if ed != null {
+        return ed.prompt() as string
+    }
+    return prompt()
+}
+
 // ---- connection lifecycle (called by /secure/master) ---------------------
 
 // The connection has just been bound to us (new login or reconnect).
@@ -160,6 +180,11 @@ pub fn enter_world(reconnected: bool) {
 // Apply: the connection has gone away (quit or dropped). The body stays in
 // the world, link-dead, until the player logs back in.
 fn net_dead() {
+    let ed = editor
+    if ed != null {
+        editor = null
+        ed.remove()
+    }
     if connected {
         connected = false
         stop_fighting()
@@ -171,13 +196,29 @@ fn net_dead() {
 
 // Apply: one line of input from the connection.
 fn process_input(line: string) {
+    let ed = editor
+    if ed != null {
+        if not (ed.input(line) as bool) {
+            editor = null
+            ed.remove()
+            message("Left the editor.")
+        }
+        if connected {
+            if editor != null {
+                send(self(), ed.prompt() as string)
+            } else {
+                send(self(), prompt())
+            }
+        }
+        return
+    }
     let input = trim(line)
     if input != "" {
         commands_run += 1
         run_command(input)
     }
     if connected {
-        send(self(), prompt())
+        send(self(), editor_prompt())
     }
 }
 
@@ -191,7 +232,7 @@ fn run_command(input: string) {
         args = trim(join_from(split(input, "'"), 1))
     } else {
         let ws = words(input)
-        verb = lower_case(ws[0])
+        verb = lower(ws[0])
         args = join_from(ws, 1)
     }
     let al = aliases()

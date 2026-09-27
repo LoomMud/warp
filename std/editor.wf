@@ -1,0 +1,241 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/editor: the `ed`-lite line editor. The `ed` command clones one per
+// editing session. While it is active, /std/player hands every input line
+// to input(). One buffer, one file, line-numbered commands:
+//
+//   p [n[,m]]   print lines (all if no range)     a     append lines, end with "."
+//   i n         insert lines before line n        d n[,m]  delete lines
+//   c n <text>  replace line n with <text>        w     write the file
+//   wq          write and quit                    q     quit (q! discards changes)
+//   h           help
+//
+// The buffer is per-session mutable state, so it lives in variables.
+
+inherit /std/object
+
+var owner: object? = null
+var path: string = ""
+var lines: [string] = []
+var dirty: bool = false
+var mode: string = "command"
+var insert_at: int = 0
+
+pub override fn short() -> string {
+    return "an editor"
+}
+
+// Load `file` (a mudlib path) for `who`. Returns a status line.
+pub fn start(who: object, file: string) -> string {
+    owner = who
+    path = file
+    let text = read_file(file)
+    if text == null {
+        lines = []
+        return $"{file}: new file."
+    }
+    lines = split(text ?? "", "\n")
+    // A trailing newline makes split() yield one empty last line.
+    let n = len(lines)
+    if n > 0 and lines[n - 1] == "" {
+        var trimmed: [string] = []
+        var i = 0
+        while i < n - 1 {
+            trimmed += [lines[i]]
+            i += 1
+        }
+        lines = trimmed
+    }
+    return $"{file}: {plural_s(len(lines), "line")}. Type h for help."
+}
+
+pub fn prompt() -> string {
+    if mode == "append" {
+        return "*"
+    }
+    return ":"
+}
+
+fn say(text: string) {
+    owner?.message(text)
+}
+
+// One line of input. Returns false when the session is over.
+pub fn input(line: string) -> bool {
+    if mode == "append" {
+        if line == "." {
+            mode = "command"
+            return true
+        }
+        insert_line(insert_at, line)
+        insert_at += 1
+        return true
+    }
+    let ws = words(line)
+    if len(ws) == 0 {
+        return true
+    }
+    let cmd = ws[0]
+    let arg = join_from(ws, 1)
+    if cmd == "p" {
+        print_range(arg)
+    } else if cmd == "a" {
+        mode = "append"
+        insert_at = len(lines)
+    } else if cmd == "i" {
+        let n = to_int(arg) ?? 0
+        if n < 1 or n > len(lines) + 1 {
+            say("i: no such line.")
+        } else {
+            mode = "append"
+            insert_at = n - 1
+        }
+    } else if cmd == "d" {
+        delete_range(arg)
+    } else if cmd == "c" {
+        var n = 0
+        if len(ws) >= 2 {
+            n = to_int(ws[1]) ?? 0
+        }
+        if n < 1 or n > len(lines) {
+            say("c: usage c <line> <new text>")
+        } else {
+            lines[n - 1] = text_after(line, 2)
+            dirty = true
+        }
+    } else if cmd == "w" {
+        write_out()
+    } else if cmd == "wq" {
+        if write_out() {
+            return false
+        }
+    } else if cmd == "q" {
+        if dirty {
+            say("Unsaved changes: w to write, q! to discard.")
+        } else {
+            return false
+        }
+    } else if cmd == "q!" {
+        return false
+    } else if cmd == "h" {
+        say("p [n[,m]] print | a append | i n insert | d n[,m] delete | c n text change | w write | wq | q | q!")
+    } else {
+        say("Unknown ed command (h for help).")
+    }
+    return true
+}
+
+// The raw text after the first `skip` words and the single space that
+// follows them, keeping any further indentation ("c 5     x" -> "    x").
+fn text_after(line: string, skip: int) -> string {
+    var seen = 0
+    var i = 0
+    while i < len(line) and seen < skip {
+        while i < len(line) and line[i] == " " {
+            i += 1
+        }
+        while i < len(line) and line[i] != " " {
+            i += 1
+        }
+        seen += 1
+    }
+    if i < len(line) {
+        i += 1
+    }
+    var out = ""
+    while i < len(line) {
+        out += line[i]
+        i += 1
+    }
+    return out
+}
+
+// "n" or "n,m" -> [from, to] (1-based, clamped); [] if invalid. Empty = all.
+fn range_of(arg: string) -> [int] {
+    if trim(arg) == "" {
+        return [1, len(lines)]
+    }
+    let parts = split(arg, ",")
+    let from = to_int(parts[0]) ?? 0
+    var to = from
+    if len(parts) == 2 {
+        to = to_int(parts[1]) ?? 0
+    }
+    if from < 1 or to < from or to > len(lines) {
+        return []
+    }
+    return [from, to]
+}
+
+fn print_range(arg: string) {
+    if len(lines) == 0 {
+        say("(empty)")
+        return
+    }
+    let r = range_of(arg)
+    if len(r) == 0 {
+        say("p: no such line.")
+        return
+    }
+    var text = ""
+    var i = r[0]
+    while i <= r[1] {
+        if text != "" {
+            text += "\n"
+        }
+        text += $"{i}\t{lines[i - 1]}"
+        i += 1
+    }
+    say(text)
+}
+
+fn insert_line(at: int, text: string) {
+    var out: [string] = []
+    var i = 0
+    while i < len(lines) {
+        if i == at {
+            out += [text]
+        }
+        out += [lines[i]]
+        i += 1
+    }
+    if at >= len(lines) {
+        out += [text]
+    }
+    lines = out
+    dirty = true
+}
+
+fn delete_range(arg: string) {
+    let r = range_of(arg)
+    if len(r) == 0 or trim(arg) == "" {
+        say("d: usage d n[,m]")
+        return
+    }
+    var out: [string] = []
+    var i = 1
+    while i <= len(lines) {
+        if i < r[0] or i > r[1] {
+            out += [lines[i - 1]]
+        }
+        i += 1
+    }
+    say($"Deleted {plural_s(r[1] - r[0] + 1, "line")}.")
+    lines = out
+    dirty = true
+}
+
+fn write_out() -> bool {
+    var text = join(lines, "\n")
+    if len(lines) > 0 {
+        text += "\n"
+    }
+    if not write_file(path, text) {
+        say($"{path}: write failed (permission, path or size).")
+        return false
+    }
+    dirty = false
+    say($"{path}: {plural_s(len(lines), "line")} written. Use `update {path}` to load it.")
+    return true
+}

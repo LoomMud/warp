@@ -1,0 +1,62 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// ed <path>: builder command (tier 2+). Opens /std/editor on a .wf or .txt
+// file. Where a builder may write (interim, until S2's valid_write):
+// tier 2-3 under /domains/ and /builders/<name>/, tier 4 anywhere except
+// /secure/. The driver also confines every path to the mudlib root.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "ed <path>: edit a file (.wf or .txt) line by line. h inside the editor lists commands. Then `update <path>`."
+}
+
+pub fn may_edit(me: object, path: string) -> bool {
+    let tier = me.query_tier() as int
+    let parts = split(path, "/")
+    if len(parts) < 3 or ".." in path {
+        return false
+    }
+    let top = parts[1]
+    if top == "secure" {
+        return false
+    }
+    if tier >= 4 {
+        return true
+    }
+    if top == "domains" {
+        return true
+    }
+    return top == "builders" and parts[2] == (me.query_name() as string)
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    var path = trim(args)
+    if path == "" {
+        me.message("Edit what? (ed /domains/<area>/<file>.wf)")
+        return true
+    }
+    if path[0] != "/" {
+        path = "/" + path
+    }
+    let n = len(path)
+    let is_wf = n > 3 and path[n - 3] == "." and path[n - 2] == "w" and path[n - 1] == "f"
+    let is_txt = n > 4 and path[n - 4] == "." and path[n - 3] == "t" and path[n - 2] == "x" and path[n - 1] == "t"
+    if not is_wf and not is_txt {
+        path += ".wf"
+    }
+    if not may_edit(me, path) {
+        me.message($"You may not edit {path}.")
+        return true
+    }
+    let ed = clone_object("/std/editor")
+    let status = ed.start(me, path) as string
+    if not (me.start_editor(ed) as bool) {
+        ed.remove()
+        me.message("You are already editing something.")
+        return true
+    }
+    me.message(status)
+    return true
+}
