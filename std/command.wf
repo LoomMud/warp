@@ -1,0 +1,41 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/command: base of every command object under /cmds. One program per
+// verb; /secure/cmdd maps verbs to programs. Commands are blueprints (never
+// cloned) and keep no per-player state.
+
+inherit /std/object
+
+// Run the command for player `me` with the rest of the line in `args`.
+pub fn main(me: object, args: string) -> bool {
+    me.message("Not implemented.")
+    return true
+}
+
+// One-line help ("look [at <thing>]: ...").
+pub fn help() -> string {
+    return ""
+}
+
+// Find a visible object called `word` in `me`'s inventory, then in its room.
+fn find_near(me: object, word: string) -> object? {
+    let held = find_carried(me, word)
+    if held != null {
+        return held
+    }
+    let env = environment(me)
+    if env == null {
+        return null
+    }
+    return env.find_here(word, me) as object?
+}
+
+fn find_carried(me: object, word: string) -> object? {
+    for ob in inventory(me) {
+        if ob.id(word) {
+            return ob
+        }
+    }
+    return null
+}

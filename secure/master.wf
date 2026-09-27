@@ -1,16 +1,48 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /secure/master: the master object. Phase 0 only answers connect().
-// No login yet: every connection gets a fresh guest player (guest1, guest2, ...).
+// /secure/master: the master object. Boots the world (clock, zones), hands
+// each new connection to a /secure/login clone, and binds the connection to
+// the player object once login finishes.
 
-var guests: int = 0
+// Zones loaded (and so reset) at boot.
+pub fn zones() -> [string] {
+    return ["/domains/start/zone", "/domains/forest/zone"]
+}
+
+fn create() {
+    load_object("/secure/combatd")
+    for z in zones() {
+        load_object(z)
+    }
+}
 
 // Apply: called by the driver for each new connection. The driver binds the
 // connection to the returned object and then calls logon() on it.
 fn connect() -> object {
-    guests += 1
-    let player = clone_object("/std/player")
-    player.set_name($"guest{guests}")
-    return player
+    return clone_object("/secure/login")
+}
+
+// True if `ob` is a /secure/login clone.
+pub fn is_login(ob: object?) -> bool {
+    if ob == null {
+        return false
+    }
+    return split(object_name(ob), "#")[0] == "/secure/login"
+}
+
+// Called by /secure/login when a login has finished: move the connection
+// from the login object to `player` and bring the player into the world.
+// Only the login object that owns the current connection may call this.
+pub fn login_complete(login: object, player: object, reconnect: bool) {
+    let tp = this_player()
+    if tp != login or not is_login(login) {
+        return
+    }
+    if not reconnect {
+        load_object("/secure/userd").register(player)
+    }
+    bind_connection(player)
+    player.enter_world(reconnect)
+    login.remove()
 }

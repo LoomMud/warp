@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/rng: the mudlib's single source of randomness. Park-Miller minimal
+// standard generator (fits in Weft's checked i64 arithmetic). Swapped for
+// the driver's random() efun once OBI-85 lands; callers only use roll().
+
+var state: int = 20260927
+
+// Uniform integer in [0, n). n must be > 0.
+pub fn roll(n: int) -> int {
+    state = (state * 48271) % 2147483647
+    return state % n
+}
+
+// Reseed (tests use this for deterministic combat).
+pub fn seed(value: int) {
+    state = value % 2147483646 + 1
+    if state < 1 {
+        state = -state + 1
+    }
+}

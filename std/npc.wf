@@ -1,0 +1,59 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/npc: a non-player living. Override the static content functions;
+// loadout() items are cloned into the NPC when it is created (per-instance
+// state, so that part legitimately happens in create()).
+
+inherit /std/living
+
+// ---- static content (override) -----------------------------------------
+
+pub override fn short() -> string {
+    return "a creature"
+}
+
+pub override fn ids() -> [string] {
+    return ["creature", "npc"]
+}
+
+// Attacks players on sight.
+pub fn aggressive() -> bool {
+    return false
+}
+
+// Program paths cloned into the NPC at creation; weapons are wielded and
+// armour worn.
+pub fn loadout() -> [string] {
+    return []
+}
+
+pub fn npc_level() -> int {
+    return 1
+}
+
+// ---- behaviour ----------------------------------------------------------
+
+override fn create() {
+    set_level(npc_level())
+    for path in loadout() {
+        let ob = clone_object(path)
+        ob.move(self())
+        if ob.is_weapon() {
+            wield(ob)
+        } else if ob.is_armour() {
+            wear(ob)
+        }
+    }
+}
+
+pub override fn see_arrival(who: object) {
+    if aggressive() and who.is_player() and query_fighting() == null {
+        let env = environment()
+        if env != null and not env.peaceful() {
+            who.message($"{cap_name()} snarls and attacks you!")
+            env.tell_except($"{cap_name()} attacks {who.the_name()}!", [self(), who])
+            attack(who)
+        }
+    }
+}

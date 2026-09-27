@@ -1,0 +1,42 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /std/corpse: what a dead living leaves behind. Holds its inventory and
+// decays after decay_ticks().
+
+inherit /std/container
+
+var dead_name: string = "someone"
+
+pub override fn short() -> string {
+    return $"the corpse of {dead_name}"
+}
+
+pub override fn ids() -> [string] {
+    return ["corpse"]
+}
+
+pub override fn gettable() -> bool {
+    return false
+}
+
+pub override fn capacity() -> int {
+    return 50
+}
+
+pub fn decay_ticks() -> int {
+    return 1200
+}
+
+override fn create() {
+    call_out("decay", decay_ticks())
+}
+
+pub fn set_dead_name(n: string) {
+    dead_name = n
+}
+
+fn decay() {
+    environment()?.tell($"{capitalize(short())} rots away.")
+    remove()
+}

@@ -1,177 +1,248 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /std/player: the object bound to a connection. Phase 0 verb dispatcher:
-// look, go <dir> and bare directions, say, update <path>, quit.
+// /std/player: the living bound to a player's connection. It parses input
+// and dispatches verbs to command objects under /cmds (see /secure/cmdd);
+// bare exit names walk. After every command it sends a prompt without a
+// trailing newline ("<hp/maxhp> "), which is also the end-of-output marker
+// the load bot (loadbot/README.md) waits for.
 
-inherit /std/object
+inherit /std/living
 
 var connected: bool = false
+var class_name: string = "adventurer"
+var commands_run: int = 0
 
-var aliases: {string: string} = {
-    "l": "look",
-    "n": "north",
-    "s": "south",
-    "e": "east",
-    "w": "west",
-    "u": "up",
-    "d": "down",
-    "ne": "northeast",
-    "nw": "northwest",
-    "se": "southeast",
-    "sw": "southwest"
+// ---- static content (override) -----------------------------------------
+
+pub override fn is_player() -> bool {
+    return true
+}
+
+pub override fn short() -> string {
+    return capitalize(name)
+}
+
+pub override fn long() -> string {
+    return $"{capitalize(name)} the {class_name}. {health_text()}"
 }
 
 pub override fn visible() -> bool {
+    return connected and not removed
+}
+
+// Input shorthands. A function, not a variable, so `update` changes it.
+pub fn aliases() -> {string: string} {
+    return {
+        "l": "look",
+        "i": "inventory",
+        "inv": "inventory",
+        "k": "kill",
+        "'": "say",
+        "n": "north",
+        "s": "south",
+        "e": "east",
+        "w": "west",
+        "u": "up",
+        "d": "down",
+        "ne": "northeast",
+        "nw": "northwest",
+        "se": "southeast",
+        "sw": "southwest"
+    }
+}
+
+pub fn start_room() -> string {
+    return "/domains/start/hall"
+}
+
+pub override fn max_hp() -> int {
+    if class_name == "warrior" {
+        return 20 + level * 12
+    }
+    return 15 + level * 8
+}
+
+pub override fn base_hitroll() -> int {
+    if class_name == "warrior" {
+        return 1 + level / 2
+    }
+    return level / 2
+}
+
+pub override fn attacks() -> int {
+    if class_name == "warrior" and level >= 5 {
+        return 2
+    }
+    return 1
+}
+
+// ---- state ----------------------------------------------------------------
+
+// Staff tier (0 = player). Looked up by name in /secure/staff rather than
+// stored here, so no call on a player object can raise it. S2 (OBI-36)
+// replaces this with /secure/roles backed by the R2 roles schema.
+pub fn query_tier() -> int {
+    return load_object("/secure/staff").tier_of(name) as int
+}
+
+pub fn query_class() -> string {
+    return class_name
+}
+
+pub fn is_connected() -> bool {
     return connected
 }
 
-// Apply: the connection is now bound to this object.
-fn logon() {
-    connected = true
-    write("Welcome to Oberfield (Loom Phase 0).")
-    write($"You are {name}. Commands: look, go <dir> (or n/s/...), say <text>, update <path>, quit.")
-    let start = load_object("/domains/start/hall")
-    move_to(start)
-    start.tell($"{name} arrives.", self())
-    cmd_look()
+pub fn query_commands_run() -> int {
+    return commands_run
 }
+
+// Called once by /secure/login for a brand-new character. A name, once
+// set, never changes (the tier lookup is keyed by it).
+pub fn setup_character(new_name: string, new_class: string) {
+    if name != "" {
+        return
+    }
+    name = new_name
+    class_name = new_class
+    set_hp(max_hp())
+}
+
+pub override fn set_name(new_name: string) {
+}
+
+fn health_text() -> string {
+    let h = query_hp()
+    let m = max_hp()
+    if h * 10 >= m * 9 {
+        return "They look healthy."
+    } else if h * 2 >= m {
+        return "They have some wounds."
+    } else if h * 4 >= m {
+        return "They are badly hurt."
+    }
+    return "They are near death."
+}
+
+pub fn prompt() -> string {
+    return $"<{query_hp()}/{max_hp()}hp> "
+}
+
+pub fn write(text: string) {
+    message(text)
+}
+
+// ---- connection lifecycle (called by /secure/master) ---------------------
+
+// The connection has just been bound to us (new login or reconnect).
+pub fn enter_world(reconnected: bool) {
+    connected = true
+    if reconnected {
+        message("You take over your body again.")
+        environment()?.tell($"{cap_name()} has reconnected.", self())
+    } else {
+        message($"Welcome to Oberfield, {cap_name()} the {class_name}.")
+        message("Type `help` for a list of commands.")
+        let env = environment()
+        if env == null {
+            let start = load_object(start_room())
+            move_to(start)
+            start.tell($"{cap_name()} arrives in a puff of smoke.", self())
+        } else {
+            env.tell($"{cap_name()} returns.", self())
+        }
+    }
+    run_command("look")
+    send(self(), prompt())
+}
+
+// Apply: the connection has gone away (quit or dropped). The body stays in
+// the world, link-dead, until the player logs back in.
+fn net_dead() {
+    if connected {
+        connected = false
+        stop_fighting()
+        environment()?.tell($"{cap_name()} has lost their link.", self())
+    }
+}
+
+// ---- input --------------------------------------------------------------
 
 // Apply: one line of input from the connection.
 fn process_input(line: string) {
     let input = trim(line)
-    if input == "" {
-        return
+    if input != "" {
+        commands_run += 1
+        run_command(input)
     }
-    let words = split(input, " ")
-    var verb = words[0]
-    let args = trim(rest(words))
-    if verb in aliases {
-        verb = aliases[verb]
-    }
-
-    if verb == "look" {
-        cmd_look()
-    } else if verb == "go" {
-        cmd_go(args)
-    } else if verb == "say" {
-        cmd_say(args)
-    } else if verb == "update" {
-        cmd_update(args)
-    } else if verb == "quit" {
-        cmd_quit()
-    } else if has_exit(verb) {
-        cmd_go(verb)
-    } else {
-        write("What?")
-    }
-}
-
-// Apply: the connection has gone away (quit or dropped).
-fn net_dead() {
     if connected {
-        connected = false
-        environment()?.tell($"{name} leaves the game.", self())
+        send(self(), prompt())
     }
 }
 
-// Send one line of text to this player (send() is verbatim, so add the newline).
-fn write(text: string) {
-    send(self(), $"{text}\n")
-}
-
-// All words after the first, joined by single spaces.
-fn rest(words: [string]) -> string {
-    var out = ""
-    var i = 1
-    while i < len(words) {
-        if out != "" {
-            out += " "
-        }
-        out += words[i]
-        i += 1
-    }
-    return out
-}
-
-fn has_exit(dir: string) -> bool {
-    let env = environment()
-    if env == null {
-        return false
-    }
-    return env.exit_dest(dir) != null
-}
-
-fn cmd_look() {
-    let env = environment()
-    if env == null {
-        write("You are nowhere.")
-        return
-    }
-    write(env.long())
-    for ob in inventory(env) {
-        if ob != self() and ob.visible() {
-            write($"{ob.short()} is here.")
-        }
-    }
-}
-
-fn cmd_go(dir_arg: string) {
-    if dir_arg == "" {
-        write("Go where?")
-        return
-    }
-    var dir = dir_arg
-    if dir in aliases {
-        dir = aliases[dir]
-    }
-    let env = environment()
-    if env == null {
-        write("You are nowhere.")
-        return
-    }
-    let path = env.exit_dest(dir)
-    if path == null {
-        write("You can't go that way.")
-        return
-    }
-    let dest = load_object(path)
-    env.tell($"{name} leaves {dir}.", self())
-    move_to(dest)
-    dest.tell($"{name} arrives.", self())
-    cmd_look()
-}
-
-fn cmd_say(text: string) {
-    if text == "" {
-        write("Say what?")
-        return
-    }
-    write($"You say: {text}")
-    environment()?.tell($"{name} says: {text}", self())
-}
-
-// Phase 0: anyone may update anything (the tier model is Phase 1).
-// With no argument, updates the current room.
-fn cmd_update(path_arg: string) {
-    var path = path_arg
-    if path == "" {
-        let env = environment()
-        if env == null {
-            write("Update what?")
-            return
-        }
-        path = object_name(env)
-    }
-    let err = compile_object(path)
-    if err == null {
-        write($"{path}: Updated.")
+// Parse and run one command line as this player. Deliberately not `pub`:
+// only this player's own input can make it act.
+fn run_command(input: string) {
+    var verb = ""
+    var args = ""
+    if input[0] == "'" {
+        verb = "say"
+        args = trim(join_from(split(input, "'"), 1))
     } else {
-        write($"{path}: update failed.\n{err}")
+        let ws = words(input)
+        verb = lower_case(ws[0])
+        args = join_from(ws, 1)
     }
+    let al = aliases()
+    if verb in al {
+        verb = al[verb] ?? verb
+    }
+    let env = environment()
+    if env != null and env.exit_dest(verb) != null {
+        go_dir(verb)
+        run_command("look")
+        return
+    }
+    let path = load_object("/secure/cmdd").find(verb, query_tier())
+    if path == null {
+        message("What?")
+        return
+    }
+    let cmd = load_object(path as string)
+    cmd.main(self(), args)
 }
 
-fn cmd_quit() {
-    write("Goodbye.")
-    disconnect(self())
+// Diku-style: re-send the prompt after every combat round we take part in.
+pub override fn combat_round() -> bool {
+    let still = super::combat_round()
+    if connected {
+        send(self(), prompt())
+    }
+    return still
+}
+
+// ---- death --------------------------------------------------------------
+
+pub override fn die(killer: object?) {
+    let env = environment()
+    stop_fighting()
+    message("You have been KILLED!")
+    if env != null {
+        env.tell($"{cap_name()} is DEAD!", self())
+    }
+    if killer != null {
+        killer.killed(self())
+    }
+    xp -= xp / 10
+    let start = load_object(start_room())
+    move_to(start)
+    set_hp(max_hp() / 2)
+    message("You wake up in the Entrance Hall, shaken but alive.")
+    start.tell($"{cap_name()} appears, looking pale.", self())
+}
+
+// A player is never worth much to kill.
+pub override fn xp_value() -> int {
+    return level * 5
 }
