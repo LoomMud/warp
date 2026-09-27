@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// fixture item10k fill <n> | fixture item10k status: drive the E1.2 fixture
+// (/domains/test/warehouse) from a session. Arch command (tier 4+).
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "fixture item10k fill <n> | fixture item10k status: the E1.2 10k-clone fixture."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ws = words(args)
+    if len(ws) < 2 or ws[0] != "item10k" {
+        me.message(help())
+        return true
+    }
+    let wh = load_object("/domains/test/warehouse")
+    if ws[1] == "fill" and len(ws) == 3 {
+        let n = parse_int(ws[2]) ?? 0
+        if n <= 0 or n > 5000 {
+            me.message("fill: 1..5000 per call.")
+            return true
+        }
+        me.message($"item10k: {wh.fill(n)} items.")
+        return true
+    }
+    if ws[1] == "status" {
+        me.message($"item10k: {wh.item_count()} items, version sum {wh.version_sum()}.")
+        return true
+    }
+    me.message(help())
+    return true
+}

@@ -1,0 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// clone <path>: builder command (tier 2+)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "clone <path>: make a new copy of a program; items go to you, everything else to the room."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    var path = trim(args)
+    if path == "" {
+        me.message("Clone what?")
+        return true
+    }
+    if path[0] != "/" {
+        path = "/" + path
+    }
+    let env = environment(me)
+    if env == null {
+        me.message("You are nowhere.")
+        return true
+    }
+    var ob: object? = null
+    try {
+        ob = clone_object(path)
+    } catch e {
+        me.message($"clone {path} failed: {e}")
+        return true
+    }
+    let made = ob ?? me
+    if made.gettable() as bool {
+        made.move(me)
+        me.message($"You clone {made.short()} ({object_name(made)}).")
+    } else {
+        made.move(env)
+        me.message($"You clone {made.short()} ({object_name(made)}) into the room.")
+        env.arrived(made)
+    }
+    env.tell($"{me.cap_name()} makes something appear out of thin air.", me)
+    return true
+}

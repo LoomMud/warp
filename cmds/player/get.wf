@@ -1,0 +1,95 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// get <item> | get all | get <item> from <container>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "get <item> | get all | get <item> from <container>: pick things up."
+}
+
+pub fn max_carried() -> int {
+    return 20
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if env == null or args == "" {
+        me.message("Get what?")
+        return true
+    }
+    let ws = words(args)
+    var from: object? = env
+    var what = args
+    var i = 0
+    while i < len(ws) {
+        if ws[i] == "from" and i > 0 and i + 1 < len(ws) {
+            what = ""
+            var j = 0
+            while j < i {
+                if what != "" {
+                    what += " "
+                }
+                what += ws[j]
+                j += 1
+            }
+            let src = find_near(me, join_from(ws, i + 1))
+            if src == null {
+                me.message("You don't see that here.")
+                return true
+            }
+            from = src
+            i = len(ws)
+        }
+        i += 1
+    }
+    let source = from ?? env
+    if what == "all" {
+        var got = 0
+        for ob in inventory(source) {
+            if ob != me and ob.visible() and ob.gettable() {
+                if take(me, ob, source, env) {
+                    got += 1
+                }
+            }
+        }
+        if got == 0 {
+            me.message("There is nothing here you can take.")
+        }
+        return true
+    }
+    var target: object? = null
+    for ob in inventory(source) {
+        if target == null and ob != me and ob.visible() and ob.id(what) {
+            target = ob
+        }
+    }
+    if target == null {
+        me.message($"You see no {what} here.")
+        return true
+    }
+    let t = target ?? me
+    if not (t.gettable() as bool) {
+        me.message($"You can't take {t.short()}.")
+        return true
+    }
+    take(me, t, source, env)
+    return true
+}
+
+fn take(me: object, ob: object, source: object, env: object) -> bool {
+    if len(inventory(me)) >= max_carried() {
+        me.message("You can't carry any more.")
+        return false
+    }
+    ob.move(me)
+    if source == env {
+        me.message($"You take {ob.short()}.")
+        env.tell($"{me.cap_name()} takes {ob.short()}.", me)
+    } else {
+        me.message($"You take {ob.short()} from {source.short()}.")
+        env.tell($"{me.cap_name()} takes {ob.short()} from {source.short()}.", me)
+    }
+    return true
+}

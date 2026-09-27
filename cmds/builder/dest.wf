@@ -1,0 +1,32 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// dest <thing>: builder command (tier 2+)
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "dest <thing>: remove something you carry or can see from the game (not players)."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    if args == "" {
+        me.message("Dest what?")
+        return true
+    }
+    let ob = find_near(me, args)
+    if ob == null {
+        me.message($"You see no {args} here.")
+        return true
+    }
+    if ob.is_player() as bool {
+        me.message("You cannot dest players.")
+        return true
+    }
+    let what = ob.short() as string
+    let id = object_name(ob)
+    ob.remove()
+    me.message($"You dest {what} ({id}).")
+    environment(me)?.tell($"{capitalize(what)} vanishes.", me)
+    return true
+}

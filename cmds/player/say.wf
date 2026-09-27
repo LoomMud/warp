@@ -1,0 +1,20 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// say <text>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "say <text>: speak to everyone in the room (shorthand: 'text)."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    if args == "" {
+        me.message("Say what?")
+        return true
+    }
+    me.message($"You say: {args}")
+    environment(me)?.tell($"{me.cap_name()} says: {args}", me)
+    return true
+}

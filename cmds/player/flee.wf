@@ -1,0 +1,33 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// flee
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "flee: try to escape a fight through a random exit."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if me.query_fighting() == null {
+        me.message("You are not fighting anyone.")
+        return true
+    }
+    if env == null {
+        return true
+    }
+    let dirs = keys(env.exits() as {string: string})
+    let rng = load_object("/secure/rng")
+    if len(dirs) == 0 or (rng.roll(3) as int) == 0 {
+        me.message("You try to flee, but can't get away!")
+        return true
+    }
+    let dir = dirs[rng.roll(len(dirs)) as int] as string
+    me.message("You flee head over heels!")
+    if me.go_dir(dir, "flees") as bool {
+        load_object("/cmds/player/look").main(me, "")
+    }
+    return true
+}

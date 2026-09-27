@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// look [at <thing>]
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "look [at <thing>]: describe your surroundings, or something near you."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let env = environment(me)
+    if env == null {
+        me.message("You are nowhere.")
+        return true
+    }
+    var what = args
+    let ws = words(args)
+    if len(ws) > 0 and ws[0] == "at" {
+        what = join_from(ws, 1)
+    }
+    if what == "" {
+        me.message(env.look_text(me) as string)
+        return true
+    }
+    let ob = find_near(me, what)
+    if ob == null {
+        me.message($"You see no {what} here.")
+        return true
+    }
+    me.message(ob.long() as string)
+    return true
+}

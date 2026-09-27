@@ -1,0 +1,31 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// score
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "score: your level, hit points, experience and equipment."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let lvl = me.query_level() as int
+    var text = $"{me.cap_name()} the {me.query_class()}, level {lvl}."
+    text += $"\nHit points: {me.query_hp()}/{me.max_hp()}  Armour class: {me.armour_class()}"
+    text += $"\nExperience: {me.query_xp()} (next level at {lvl * lvl * 100})"
+    let w = me.query_wielded()
+    if w != null {
+        text += $"\nWielding: {w.short()}"
+    }
+    let f = me.query_fighting()
+    if f != null {
+        text += $"\nFighting: {f.the_name()}"
+    }
+    let tier = me.query_tier() as int
+    if tier > 0 {
+        text += $"\nStaff tier: {tier}"
+    }
+    me.message(text)
+    return true
+}

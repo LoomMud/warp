@@ -1,0 +1,27 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// tell <player> <text>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "tell <player> <text>: send a private message to a player anywhere."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ws = words(args)
+    if len(ws) < 2 {
+        me.message("Tell whom what?")
+        return true
+    }
+    let who = load_object("/secure/userd").find(lower_case(ws[0]))
+    if who == null or not (who.is_connected() as bool) {
+        me.message("No such player is online.")
+        return true
+    }
+    let text = join_from(ws, 1)
+    who.message($"{me.cap_name()} tells you: {text}")
+    me.message($"You tell {who.cap_name()}: {text}")
+    return true
+}

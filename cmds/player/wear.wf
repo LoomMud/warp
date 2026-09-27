@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// wear <armour>
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "wear <armour>: put on armour you are carrying."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ob = find_carried(me, args)
+    if ob == null {
+        me.message("You are not carrying that.")
+        return true
+    }
+    let err = me.wear(ob) as string
+    if err != "" {
+        me.message(err)
+        return true
+    }
+    me.message($"You wear {ob.short()}.")
+    environment(me)?.tell($"{me.cap_name()} wears {ob.short()}.", me)
+    return true
+}
