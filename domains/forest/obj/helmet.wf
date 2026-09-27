@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/helmet
+
+inherit /std/armour
+
+pub override fn short() -> string {
+    return "a dented helmet"
+}
+
+pub override fn ids() -> [string] {
+    return ["helmet", "helm"]
+}
+
+pub override fn long() -> string {
+    return "An iron cap with a large dent in one side."
+}
+
+pub override fn slot() -> string {
+    return "head"
+}

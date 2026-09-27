@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/stick
+
+inherit /std/weapon
+
+pub override fn short() -> string {
+    return "a heavy stick"
+}
+
+pub override fn ids() -> [string] {
+    return ["stick", "club"]
+}
+
+pub override fn long() -> string {
+    return "A fallen oak branch, thick enough to make a decent club."
+}
+
+pub override fn sides() -> int {
+    return 4
+}
+
+pub override fn verb() -> string {
+    return "club"
+}

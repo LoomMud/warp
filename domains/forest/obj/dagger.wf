@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/dagger
+
+inherit /std/weapon
+
+pub override fn short() -> string {
+    return "a notched dagger"
+}
+
+pub override fn ids() -> [string] {
+    return ["dagger", "knife"]
+}
+
+pub override fn long() -> string {
+    return "A crude iron blade, notched and stained."
+}
+
+pub override fn sides() -> int {
+    return 4
+}
+
+pub override fn hitroll() -> int {
+    return 1
+}
+
+pub override fn verb() -> string {
+    return "stab"
+}
+
+pub override fn weight() -> int {
+    return 1
+}

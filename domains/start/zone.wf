@@ -1,0 +1,18 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/start/zone: the Hall zone
+
+inherit /std/zone
+
+pub override fn short() -> string {
+    return "the Hall zone"
+}
+
+pub override fn rooms() -> [string] {
+    return ["/domains/start/hall", "/domains/start/garden"]
+}
+
+pub override fn lifespan() -> int {
+    return 6000
+}

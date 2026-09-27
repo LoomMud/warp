@@ -1,0 +1,38 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/npc/wolf
+
+inherit /std/npc
+
+pub override fn short() -> string {
+    return "a grey wolf"
+}
+
+pub override fn ids() -> [string] {
+    return ["wolf"]
+}
+
+pub override fn long() -> string {
+    return "A lean grey wolf with yellow eyes. It watches you hungrily."
+}
+
+pub override fn npc_level() -> int {
+    return 2
+}
+
+pub override fn aggressive() -> bool {
+    return true
+}
+
+pub override fn loadout() -> [string] {
+    return []
+}
+
+pub override fn bare_sides() -> int {
+    return 6
+}
+
+pub override fn natural_ac() -> int {
+    return 1
+}

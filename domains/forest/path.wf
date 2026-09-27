@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/path
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "A Forest Path"
+}
+
+pub override fn describe() -> string {
+    return "The path winds between moss-covered trunks. Broken twigs and muddy footprints suggest something passes this way often. The path continues east and north; the edge of the wood is to the west."
+}
+
+pub override fn exits() -> {string: string} {
+    return {"west": "/domains/forest/edge", "east": "/domains/forest/clearing", "north": "/domains/forest/stream"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/forest/npc/rabbit": 2}
+}

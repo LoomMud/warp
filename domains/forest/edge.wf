@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/edge
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "Edge of the Wood"
+}
+
+pub override fn describe() -> string {
+    return "The road from the hall ends here, where old oaks crowd together. A narrow path leads east into the gloom; the hall lies back to the west."
+}
+
+pub override fn exits() -> {string: string} {
+    return {"west": "/domains/start/hall", "east": "/domains/forest/path"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/forest/obj/stick": 1}
+}

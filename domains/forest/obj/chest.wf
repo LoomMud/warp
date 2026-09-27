@@ -1,0 +1,28 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/obj/chest
+
+inherit /std/container
+
+pub override fn short() -> string {
+    return "a battered chest"
+}
+
+pub override fn ids() -> [string] {
+    return ["chest"]
+}
+
+pub override fn gettable() -> bool {
+    return false
+}
+
+pub override fn long() -> string {
+    return $"A wooden chest bound with rusting iron.\n{contents_text()}"
+}
+
+// Loot is per-instance state: a fresh chest from a reset comes stocked.
+override fn create() {
+    clone_object("/domains/forest/obj/helmet").move(self())
+    clone_object("/domains/forest/obj/sword").move(self())
+}

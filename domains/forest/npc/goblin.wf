@@ -1,0 +1,30 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/npc/goblin
+
+inherit /std/npc
+
+pub override fn short() -> string {
+    return "a goblin"
+}
+
+pub override fn ids() -> [string] {
+    return ["goblin"]
+}
+
+pub override fn long() -> string {
+    return "A scrawny green goblin in filthy rags, clutching a dagger."
+}
+
+pub override fn npc_level() -> int {
+    return 2
+}
+
+pub override fn aggressive() -> bool {
+    return false
+}
+
+pub override fn loadout() -> [string] {
+    return ["/domains/forest/obj/dagger"]
+}

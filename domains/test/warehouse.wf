@@ -1,0 +1,50 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/test/warehouse: E1.2 fixture room (V4 / OBI-34). fill(n) clones n
+// plain /std/item objects into the room; the V4 exit test calls it until
+// 10,000 clones exist, then recompiles /std/item (fixtures/item10k/).
+// Not linked to the game map.
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "A Vast Warehouse"
+}
+
+pub override fn describe() -> string {
+    return "Shelves of identical crates stretch out of sight. Fixture room for the 10k-clone upgrade test."
+}
+
+pub override fn peaceful() -> bool {
+    return true
+}
+
+// Clone `n` more /std/item objects into this room; each gets a distinct
+// condition so the upgrade migration can be checked per instance. Returns
+// the total now here.
+pub fn fill(n: int) -> int {
+    var have = len(inventory(self()))
+    var i = 0
+    while i < n {
+        let ob = clone_object("/std/item")
+        ob.wear_down((have + i) % 100)
+        ob.move(self())
+        i += 1
+    }
+    return len(inventory(self()))
+}
+
+pub fn item_count() -> int {
+    return len(inventory(self()))
+}
+
+// Sum of schema_version() over the contents: equals item_count() * v once
+// every clone runs version v of /std/item.
+pub fn version_sum() -> int {
+    var sum = 0
+    for ob in inventory(self()) {
+        sum += ob.schema_version() as int
+    }
+    return sum
+}

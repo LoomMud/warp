@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/clearing
+
+inherit /std/room
+
+pub override fn short() -> string {
+    return "A Trampled Clearing"
+}
+
+pub override fn describe() -> string {
+    return "Trees have been hacked down here and the ground is churned to mud. Crude lean-tos ring a smoking fire pit. A dark hole in a hillside opens to the east."
+}
+
+pub override fn exits() -> {string: string} {
+    return {"west": "/domains/forest/path", "east": "/domains/forest/den"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/forest/npc/goblin": 2}
+}

@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/npc/chief
+
+inherit /std/npc
+
+pub override fn short() -> string {
+    return "the goblin chief"
+}
+
+pub override fn ids() -> [string] {
+    return ["chief", "goblin"]
+}
+
+pub override fn long() -> string {
+    return "A hulking goblin with a necklace of teeth. He does not like visitors."
+}
+
+pub override fn npc_level() -> int {
+    return 4
+}
+
+pub override fn aggressive() -> bool {
+    return true
+}
+
+pub override fn loadout() -> [string] {
+    return ["/domains/forest/obj/sword", "/domains/forest/obj/jerkin"]
+}
+
+pub override fn max_hp() -> int {
+    return 60
+}

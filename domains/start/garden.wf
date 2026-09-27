@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /domains/start/garden: north of the hall.
+// /domains/start/garden
 
 inherit /std/room
 
@@ -15,4 +15,12 @@ pub override fn describe() -> string {
 
 pub override fn exits() -> {string: string} {
     return {"south": "/domains/start/hall"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/start/obj/bench": 1}
+}
+
+pub override fn peaceful() -> bool {
+    return true
 }

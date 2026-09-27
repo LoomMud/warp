@@ -1,0 +1,24 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /domains/forest/zone: the Goblin Wood
+
+inherit /std/zone
+
+pub override fn short() -> string {
+    return "the Goblin Wood"
+}
+
+pub override fn rooms() -> [string] {
+    return [
+        "/domains/forest/edge",
+        "/domains/forest/path",
+        "/domains/forest/stream",
+        "/domains/forest/clearing",
+        "/domains/forest/den"
+    ]
+}
+
+pub override fn lifespan() -> int {
+    return 1800
+}

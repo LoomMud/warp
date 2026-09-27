@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /domains/start/hall: where new connections arrive.
+// /domains/start/hall
 
 inherit /std/room
 
@@ -10,9 +10,17 @@ pub override fn short() -> string {
 }
 
 pub override fn describe() -> string {
-    return "A high-ceilinged hall of pale stone. Morning light spills in through an open archway to the north, and you can smell cut grass."
+    return "A high-ceilinged hall of pale stone. Morning light spills in through an open archway to the north, and a heavy oak door stands open to the east, onto a forest road. A notice by the door reads: 'Fighting in the hall is forbidden.'"
 }
 
 pub override fn exits() -> {string: string} {
-    return {"north": "/domains/start/garden"}
+    return {"north": "/domains/start/garden", "east": "/domains/forest/edge"}
+}
+
+pub override fn spawns() -> {string: int} {
+    return {"/domains/start/obj/torch": 1}
+}
+
+pub override fn peaceful() -> bool {
+    return true
 }
