@@ -7,5 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 "${LOOM_CLI:-loom-cli}" check .
-scripts/check-dco.sh
+# End-to-end session test against a real `loom serve` (needs python3).
+LOOM_CLI="${LOOM_CLI:-loom-cli}" tests/smoke.py
+scripts/check-dco.sh "${DCO_RANGE:-origin/main..HEAD}"
 echo "ci-local: all gates green"

@@ -5,8 +5,22 @@
 Warp is Oberfield's base mudlib, written from scratch in **Weft** for the **Loom** driver (spec v2, Paperclip OBI-4).
 It owns all game policy: master object, login, rooms, items, commands, combat.
 
-Layout (spec §3.2): `/secure` (master, roles, login), `/std` (base classes), `/cmds`, `/domains/<area>`,
-`/builders/<uid>` (staff workrooms).
+Layout (spec §3.2): `/secure` (master, login, daemons), `/std` (base classes), `/cmds`, `/domains/<area>`,
+`/builders/<uid>` (staff workrooms). Conventions for writing `/std` and domain code, including the
+upgrade rules (D-P1.4), are in [`docs/std-conventions.md`](docs/std-conventions.md).
+
+## Playing the alpha
+
+```sh
+loom-cli serve --mudlib .            # telnet to $LOOM_TELNET_ADDR (default 127.0.0.1:4000)
+LOOM_CLI=loom-cli tests/smoke.py     # scripted end-to-end check
+```
+
+Pick a name, create a character (warrior or rogue), and type `help`. The Goblin Wood lies east of the hall.
+Builders (tier 2+, listed in `/secure/staff`) also get `update`, `clone`, `dest`, `goto` and `reset`.
+
+- `fixtures/item10k/`: the E1.2 10k-clone `/std/item` upgrade fixture (V4).
+- `loadbot/`: the command mix and login contract for the R4 load bot.
 
 Rules: DCO sign-off on every commit (`git commit -s`), SPDX header in every `.wf` file
 (`SPDX-License-Identifier` tag, value `AGPL-3.0-only`), no secrets or unlicensed assets.
