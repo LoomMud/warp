@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// update [<path>|here]: builder command (tier 2+)
+// update [<path>|here]: staff command. /secure/master's valid_compile
+// decides what each tier may recompile.
 
 inherit /std/command
 
@@ -19,7 +20,13 @@ pub override fn main(me: object, args: string) -> bool {
         }
         path = split(object_name(env), "#")[0]
     }
-    let err = compile_object(path)
+    var err: string? = null
+    try {
+        err = compile_object(path)
+    } catch e {
+        me.message($"{path}: update failed.\n{e}")
+        return true
+    }
     if err == null {
         me.message($"{path}: Updated.")
     } else {

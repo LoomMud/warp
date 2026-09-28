@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// revoke <name> <efun|path|db_query> <target> <reason>: arch command.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "revoke <name> <efun|path|db_query> <target> <reason>: withdraw a grant."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ws = words(args)
+    if len(ws) < 4 {
+        me.message(help())
+        return true
+    }
+    let who = lower(ws[0])
+    let err = load_object("/secure/roles").revoke(who, ws[1], ws[2], join_from(ws, 3)) as string
+    if err != "" {
+        me.message($"Refused: {err}.")
+    } else {
+        me.message($"Request to revoke {capitalize(who)}'s {ws[1]} {ws[2]} sent.")
+    }
+    return true
+}

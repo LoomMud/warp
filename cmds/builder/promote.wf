@@ -1,0 +1,47 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// promote <name> <tier> <reason>: staff command. Raises a tier through
+// /secure/roles (domain leads: apprentice -> builder in their domains;
+// arches: up to domain lead; roots: tiers 4-5 by two-root proposal).
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "promote <name> <tier> <reason>: raise a staff tier (tiers 4-5 need two roots; see approve)."
+}
+
+pub fn direction() -> int {
+    return 1
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ws = words(args)
+    if len(ws) < 3 {
+        me.message(help())
+        return true
+    }
+    let who = lower(ws[0])
+    let t = to_int(ws[1]) ?? -1
+    let r = load_object("/secure/roles")
+    let cur = r.tier(who) as int
+    if (t - cur) * direction() <= 0 {
+        var other = "promote"
+        if direction() > 0 {
+            other = "demote"
+        }
+        me.message($"{capitalize(who)} is tier {cur}; use {other}.")
+        return true
+    }
+    let err = r.set_tier(who, t, join_from(ws, 2)) as string
+    if err != "" {
+        me.message($"Refused: {err}.")
+        return true
+    }
+    if t >= 4 or cur >= 4 {
+        me.message($"Proposal to set {capitalize(who)} to tier {t} sent; a second root must approve it.")
+    } else {
+        me.message($"Request to set {capitalize(who)} to tier {t} sent.")
+    }
+    return true
+}

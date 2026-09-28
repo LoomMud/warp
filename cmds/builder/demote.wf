@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// demote <name> <tier> <reason>: staff command. Lowers a tier; the same
+// rules as promote.
+
+inherit /cmds/builder/promote
+
+pub override fn help() -> string {
+    return "demote <name> <tier> <reason>: lower a staff tier (from tier 4-5 needs two roots)."
+}
+
+pub override fn direction() -> int {
+    return -1
+}

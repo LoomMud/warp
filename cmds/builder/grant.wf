@@ -1,0 +1,28 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// grant <name> <efun|path|db_query> <target> <days> <reason>: arch
+// command. A time-boxed exception beyond a tier.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "grant <name> <efun|path|db_query> <target> <days> <reason>: time-boxed exception."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let ws = words(args)
+    if len(ws) < 5 {
+        me.message(help())
+        return true
+    }
+    let who = lower(ws[0])
+    let days = to_int(ws[3]) ?? 0
+    let err = load_object("/secure/roles").grant(who, ws[1], ws[2], days, join_from(ws, 4)) as string
+    if err != "" {
+        me.message($"Refused: {err}.")
+    } else {
+        me.message($"Request to grant {capitalize(who)} {ws[1]} {ws[2]} for {days} days sent.")
+    }
+    return true
+}

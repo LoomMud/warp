@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// clone <path>: builder command (tier 2+)
+// clone <path>: staff command (tier 1+)
 
 inherit /std/command
 
