@@ -65,6 +65,27 @@ override fn create() {
     } else {
         report += ["roles-facade:refused"]
     }
+    // OBI-154: destruct(self()) is P0 (loom OBI-149) regardless of tier,
+    // but destruct(other) from this frame (self() == probe, not the
+    // victim) is still P2 -- a tier 1 apprentice has no `destruct` grant
+    // and max_class(1) == 1, so it stays denied.
+    let victim1 = clone_object("/builders/appr/box")
+    try {
+        victim1.self_destruct()
+        report += [$"destruct-self:ok:{destructed(victim1)}"]
+    } catch {
+        report += ["destruct-self:denied"]
+    }
+    let victim2 = clone_object("/builders/appr/box")
+    try {
+        destruct(victim2)
+        report += ["destruct-other:ok"]
+    } catch {
+        report += ["destruct-other:denied"]
+    }
+    if not destructed(victim2) {
+        victim2.remove()
+    }
     // max_objects (tier 1: 200), charged to the owner: us.
     var made = 0
     try {
