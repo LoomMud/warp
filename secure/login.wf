@@ -56,19 +56,13 @@ fn logon() {
     ask_name()
 }
 
+// Delegates to /secure/master.is_account_name so reserved names (root,
+// mudlib, admin, builders, domain -- OBI-155) are refused in exactly one
+// place, before an account is ever created. The driver's D-S3.1 fix
+// (refusing seteuid onto root/mudlib/`*:*` outside /secure) is the real
+// backstop; this keeps such an account from being created at all.
 pub fn valid_name(n: string) -> bool {
-    if len(n) < 3 or len(n) > 16 {
-        return false
-    }
-    let letters = "abcdefghijklmnopqrstuvwxyz"
-    var i = 0
-    while i < len(n) {
-        if not (n[i] in letters) {
-            return false
-        }
-        i += 1
-    }
-    return true
+    return load_object("/secure/master").is_account_name(n) as bool
 }
 
 fn process_input(line: string) {
