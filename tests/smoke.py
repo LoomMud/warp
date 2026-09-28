@@ -40,6 +40,16 @@ class Server:
         self.root = root
         self.port = free_port()
         env = dict(os.environ, LOOM_TELNET_ADDR=f"127.0.0.1:{self.port}")
+        # Staff tiers without Postgres (OBI-36): the driver loads this
+        # snapshot at boot; see tests/roles-seed.json.
+        env.setdefault("LOOM_ROLES_SEED", os.path.join(ROOT, "tests", "roles-seed.json"))
+        # Never inherit DATABASE_URL: in agent and CI shells it can point at
+        # an unrelated database. Opt in with LOOM_SMOKE_DATABASE_URL (a
+        # migrated loom database); without it the driver's in-memory dev
+        # backend serves accounts and the seed above serves roles.
+        env.pop("DATABASE_URL", None)
+        if os.environ.get("LOOM_SMOKE_DATABASE_URL"):
+            env["DATABASE_URL"] = os.environ["LOOM_SMOKE_DATABASE_URL"]
         env.setdefault("RUST_LOG", "warn")
         self.proc = subprocess.Popen(
             [LOOM, "serve", "--mudlib", root],
@@ -73,6 +83,11 @@ class Client:
         self.sock.settimeout(0.05)
         self.buf = ""
         self.log = []
+        # loom-net drops a connection that sends more than 20 lines in a
+        # burst or 5 a second sustained (OBI-26). Stay inside that with the
+        # same token bucket (a little slower), or fast scenarios flake.
+        self.tokens = 18.0
+        self.last = time.time()
 
     def _pump(self):
         try:
@@ -102,6 +117,14 @@ class Client:
             self._pump()
 
     def send(self, line):
+        now = time.time()
+        self.tokens = min(18.0, self.tokens + (now - self.last) * 4.5)
+        self.last = now
+        if self.tokens < 1.0:
+            time.sleep((1.0 - self.tokens) / 4.5)
+            self.tokens = 1.0
+            self.last = time.time()
+        self.tokens -= 1.0
         self.sock.sendall((line + "\r\n").encode())
 
     def cmd(self, line, pattern=r"<\d+/\d+hp> ", timeout=3.0):
@@ -213,7 +236,8 @@ def scenario_builder(server):
     w.cmd("goto /domains/forest/den", r"Goblin Den")
     w.cmd("goto /domains/start/garden", r"Walled Garden")
     w.cmd("update here", r"/domains/start/garden: Updated\.")
-    w.cmd("update /std/item.wf", r"/std/item: Updated\.")
+    # Protected code (/std) is recompiled by arches and roots only.
+    w.cmd("update /std/item.wf", r"/std/item: update failed")
     w.cmd("update /nope/nothing", r"update failed")
     w.cmd("clone /std/npc", r"into the room")
     w.cmd("reset", r"Room reset")
@@ -246,8 +270,11 @@ def scenario_ed(server):
     """ed-lite: write a room file, update it, goto it."""
     w = login(server, "builder")
     w.cmd("ed /secure/master.wf", r"You may not edit /secure/master\.wf")
+    # A builder writes live only in its workroom; domain content goes to
+    # wip/ of its domains (live areas are for leads and arches).
+    w.cmd("ed /domains/start/hall.wf", r"You may not edit /domains/start/hall\.wf")
     w.buf = ""
-    w.send("ed /domains/test/scratch")
+    w.send("ed /domains/test/wip/scratch")
     w.expect(r"scratch\.wf: new file.*:", timeout=5)
     lines = [
         "a",
@@ -269,11 +296,11 @@ def scenario_ed(server):
     w.expect(r'5\t    return "An Edited Room"')
     w.send("wq")
     w.expect(r"6 lines written.*Left the editor.*<\d+/\d+hp> ", timeout=5)
-    w.cmd("update /domains/test/scratch", r"Updated\.")
-    w.cmd("goto /domains/test/scratch", r"An Edited Room")
+    w.cmd("update /domains/test/wip/scratch", r"Updated\.")
+    w.cmd("goto /domains/test/wip/scratch", r"An Edited Room")
     # Edit again: q refuses with unsaved changes, q! discards.
     w.buf = ""
-    w.send("ed /domains/test/scratch.wf")
+    w.send("ed /domains/test/wip/scratch.wf")
     w.expect(r"6 lines")
     w.send("d 6")
     w.expect(r"Deleted 1 line")
@@ -282,12 +309,12 @@ def scenario_ed(server):
     w.send("q!")
     w.expect(r"Left the editor")
     w.close()
-    os.remove(os.path.join(ROOT, "domains", "test", "scratch.wf"))
+    shutil.rmtree(os.path.join(ROOT, "domains", "test", "wip"))
 
 
 def scenario_upgrade_live(server):
     """Live `update` of /std/room keeps players connected (Phase 0 E0.1 again)."""
-    w = login(server, "legolas")
+    w = login(server, "aragorn")
     p = login(server, "carol")
     w.cmd("update /std/room", r"/std/room: Updated\.")
     w.cmd("update /std/living", r"/std/living: Updated\.")
@@ -326,6 +353,61 @@ def scenario_item10k(server):
     p.close()
 
 
+def scenario_tiers(server):
+    """Spec §5.11.4 exit test on a private copy: an apprentice (tier 1)
+    cannot write outside its workroom, cannot exceed its quotas and cannot
+    escalate; its workroom objects are confined; rank rules hold."""
+    fix = os.path.join(ROOT, "tests", "fixtures", "tiers")
+    room = os.path.join(server.root, "builders", "appr")
+    os.makedirs(room, exist_ok=True)
+    for f in ("probe.wf", "box.wf"):
+        shutil.copy(os.path.join(fix, f), os.path.join(room, f))
+    a = login(server, "appr")
+    a.cmd("roles", r"Appr: tier 1 \(apprentice\).*max_objects 200")
+    a.cmd("who", r"Appr the warrior \(level 1\) \[staff\]")
+    a.cmd("ed /domains/start/hall.wf", r"You may not edit /domains/start/hall\.wf")
+    a.cmd("ed /std/item.wf", r"You may not edit /std/item\.wf")
+    a.cmd("update /std/item", r"/std/item: update failed")
+    a.cmd("update /domains/start/garden", r"/domains/start/garden: update failed")
+    a.cmd("promote appr 5 because", r"Refused: you may not change your own tier")
+    a.cmd("promote builder 3 because", r"Refused: only domain leads and above")
+    a.cmd("grant gimli efun destruct 1 because", r"Refused: only arches and roots")
+    # Confinement: a workroom object never enters a live room.
+    a.cmd("clone /builders/appr/box", r"You clone a practice box")
+    a.cmd("goto /domains/start/hall", r"Entrance Hall")
+    a.cmd("drop box", r"drop: .*")
+    a.cmd("i", r"a practice box")
+    a.cmd("update /builders/appr/probe", r"/builders/appr/probe: Updated\.")
+    m = a.cmd("goto /builders/appr/probe", r"Report: ([^\n]*)")
+    report = m.group(1)
+    for want in ("write-live:denied", "write-std:denied", "write-other-workroom:denied",
+                 "write-own:ok", "compile-std:denied", "read-secure:denied",
+                 "seteuid:denied", "roles-efun:denied", "roles-facade:refused"):
+        assert want in report, f"{want!r} not in report: {report}"
+    clones = int(re.search(r"clones:(\d+)", report).group(1))
+    assert 150 <= clones < 200, f"max_objects 200 not enforced: {report}"
+    assert "callouts:8" in report, f"max_callouts_obj 8 not enforced: {report}"
+    assert not os.path.exists(os.path.join(server.root, "domains", "start", "pwned.txt"))
+    assert not os.path.exists(os.path.join(server.root, "std", "pwned.txt"))
+    assert os.path.exists(os.path.join(room, "notes.txt"))
+    # At the object quota now: one more clone is refused.
+    a.cmd("clone /builders/appr/box", r"object quota exceeded for `appr` \(limit 200\)")
+    # Staff below root cannot promote to tier 4/5; a root's request goes to
+    # the two-root proposal path (the dev worker has no Postgres, so the
+    # driver answers "unavailable"; loom's roles_demo covers the SQL).
+    r = login(server, "aragorn")
+    r.cmd("roles appr", r"Appr: tier 1")
+    r.cmd("promote appr 2 trial over", r"Request to set Appr to tier 2 sent\.")
+    r.expect(r"\[roles\] Request \d+ refused: unavailable", timeout=10)
+    r.cmd("promote gimli 4 arch", r"Proposal to set Gimli to tier 4 sent")
+    r.expect(r"\[roles\] Request \d+ refused: unavailable", timeout=10)
+    l = login(server, "legolas")
+    l.cmd("promote gimli 4 arch", r"Refused: tier 4 and 5 changes need a root")
+    l.cmd("member start gimli lead x", r"Refused: domain leads may not appoint or remove leads")
+    for c in (a, r, l):
+        c.close()
+
+
 SCENARIOS = {
     "basics": (scenario_basics, False),
     "builder": (scenario_builder, False),
@@ -333,11 +415,12 @@ SCENARIOS = {
     "ed": (scenario_ed, False),
     "combat": (scenario_combat, True),
     "item10k": (scenario_item10k, False),  # runs on a private copy
+    "tiers": (scenario_tiers, False),  # runs on a private copy
 }
 
 
 # Scenarios that modify mudlib files get their own server on a scratch copy.
-PRIVATE = {"item10k"}
+PRIVATE = {"item10k", "tiers"}
 
 
 def run(n, server):

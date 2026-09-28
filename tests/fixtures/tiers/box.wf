@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Tier smoke fixture, installed as /builders/appr/box.wf: an apprentice's
+// test item. Its program is in a workroom, so it is CONFINED.
+
+inherit /std/item
+
+pub override fn short() -> string {
+    return "a practice box"
+}
+
+pub override fn ids() -> [string] {
+    return ["box"]
+}

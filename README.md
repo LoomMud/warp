@@ -13,11 +13,14 @@ upgrade rules (D-P1.4), are in [`docs/std-conventions.md`](docs/std-conventions.
 
 ```sh
 loom-cli serve --mudlib .            # telnet to $LOOM_TELNET_ADDR (default 127.0.0.1:4000)
-LOOM_CLI=loom-cli tests/smoke.py     # scripted end-to-end check
+LOOM_CLI=loom-cli tests/smoke.py     # scripted end-to-end check (seeds tiers itself; ignores DATABASE_URL)
 ```
 
 Pick a name and password (an R2 account), choose a class (warrior or rogue), and type `help`. The Goblin Wood lies east of the hall.
-Builders (tier 2+, listed in `/secure/staff`) also get `update`, `ed`, `clone`, `dest`, `goto` and `reset`.
+Staff (tiers 1-5 in the roles tables, see `/secure/roles`) also get `update`, `ed`, `clone`, `dest`, `goto`, `reset`
+and the role commands. What each tier may touch is `/secure/master`'s policy ([`docs/std-conventions.md`](docs/std-conventions.md)).
+Without Postgres, `LOOM_ROLES_SEED=tests/roles-seed.json` gives the dev staff list. It is keyed on account names
+anyone can register, so use it only on a private dev server, never on a shared one.
 
 - `fixtures/item10k/`: the E1.2 10k-clone `/std/item` upgrade fixture (V4).
 - `loadbot/`: the command mix and login contract for the R4 load bot.
