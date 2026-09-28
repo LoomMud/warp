@@ -1,0 +1,207 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// /secure/roles: the mudlib's only door to the staff tier model (spec r5
+// §5.11, OBI-36 design note D-S2.1/D-S2.2).
+//
+// The cache itself is the driver's RolesSnapshot, loaded from Postgres
+// (staff, domain_members, tier_policy, active_grants) and swapped in on
+// LISTEN roles_changed, after every change and at the next grant expiry.
+// The roles_* read efuns only work from /secure code, so everything else
+// asks here. Nothing is copied into Weft variables.
+//
+// Changes go through the driver's async mutation efuns, which call R2's
+// SECURITY DEFINER functions with the driver-chosen actor (the euid of the
+// player whose input started the execution) and write role_changes. The
+// rank checks below mirror those SQL rules so a refusal is quick and
+// explains itself; the database re-checks everything. The answer arrives
+// later as roles_result(id, ok, detail) on the player object.
+
+// ---- reads ---------------------------------------------------------------
+
+pub fn tier(uid: string) -> int {
+    return roles_tier(uid)
+}
+
+pub fn member(uid: string, domain: string) -> bool {
+    return roles_is_member(uid, domain)
+}
+
+pub fn lead(uid: string, domain: string) -> bool {
+    return roles_is_lead(uid, domain)
+}
+
+pub fn has_grant(uid: string, kind: string, target: string) -> bool {
+    return roles_has_grant(uid, kind, target)
+}
+
+// The tier_policy row for `uid`'s tier: {column: value}; empty for players.
+pub fn policy(uid: string) -> {string: int} {
+    return roles_policy(roles_tier(uid))
+}
+
+pub fn domains(uid: string) -> [string] {
+    return roles_domains(uid)
+}
+
+pub fn tier_name(t: int) -> string {
+    if t == 1 {
+        return "apprentice"
+    } else if t == 2 {
+        return "builder"
+    } else if t == 3 {
+        return "domain lead"
+    } else if t == 4 {
+        return "arch"
+    } else if t == 5 {
+        return "root"
+    }
+    return "player"
+}
+
+// True if `actor` leads a domain that `target` belongs to.
+pub fn leads_domain_of(actor: string, target: string) -> bool {
+    for d in roles_domains(target) {
+        if roles_is_lead(actor, d) {
+            return true
+        }
+    }
+    return false
+}
+
+// ---- changes -------------------------------------------------------------
+//
+// Each returns "" once the request is on its way (the result follows as
+// roles_result on the acting player), or a reason for refusing it.
+
+// The acting player: the only principal the driver will pass to SQL.
+fn actor() -> string {
+    let tp = this_player()
+    if tp == null {
+        return ""
+    }
+    return tp.query_name() as string
+}
+
+fn sent(id: int) -> string {
+    if id < 0 {
+        return "the roles service is unavailable"
+    }
+    return ""
+}
+
+// Set `target`'s tier to 1-5. T4 and T5 changes (grants, or moving
+// someone out of those ranks) need two roots: this files a proposal that a
+// second root approves (§5.11.2 "two-root rule").
+pub fn set_tier(target: string, new_tier: int, reason: string) -> string {
+    let me = actor()
+    let mt = roles_tier(me)
+    let tt = roles_tier(target)
+    if me == "" or mt == 0 {
+        return "only staff may change tiers"
+    }
+    if target == me {
+        return "you may not change your own tier"
+    }
+    if reason == "" {
+        return "a reason is required"
+    }
+    if new_tier < 1 or new_tier > 5 {
+        return "tiers are 1 (apprentice) to 5 (root); removing staff is not supported yet"
+    }
+    if new_tier == tt {
+        return $"{target} is already tier {tt}"
+    }
+    if new_tier >= 4 or tt >= 4 {
+        if mt < 5 {
+            return "tier 4 and 5 changes need a root (and a second root to approve)"
+        }
+        return sent(roles_propose_tier(target, new_tier, reason))
+    }
+    if mt == 3 {
+        let step = (tt == 1 and new_tier == 2) or (tt == 2 and new_tier == 1)
+        if not step {
+            return "domain leads may only promote apprentices to builder or demote builders to apprentice"
+        }
+        if not leads_domain_of(me, target) {
+            return $"{target} is not in a domain you lead"
+        }
+    } else if mt < 3 {
+        return "only domain leads and above may change tiers"
+    }
+    return sent(roles_set_tier(target, new_tier, reason))
+}
+
+// Approve two-root proposal `id` (T5 only; not your own, not for you).
+pub fn approve(id: int) -> string {
+    if roles_tier(actor()) < 5 {
+        return "only a root may approve tier proposals"
+    }
+    return sent(roles_approve(id))
+}
+
+// role: "member", "lead" or "none" (removes the membership).
+pub fn set_member(domain: string, target: string, role: string, reason: string) -> string {
+    let me = actor()
+    let mt = roles_tier(me)
+    if not (role == "member" or role == "lead" or role == "none") {
+        return "role is member, lead or none"
+    }
+    if reason == "" {
+        return "a reason is required"
+    }
+    if mt < 3 {
+        return "only domain leads and above may change domain membership"
+    }
+    if mt == 3 {
+        if not roles_is_lead(me, domain) {
+            return $"you do not lead {domain}"
+        }
+        if role == "lead" or roles_is_lead(target, domain) {
+            return "domain leads may not appoint or remove leads"
+        }
+    }
+    if role != "none" and roles_tier(target) == 0 {
+        return $"{target} is not staff"
+    }
+    return sent(roles_set_member(domain, target, role, reason))
+}
+
+// kind: "efun", "path" or "db_query". Grants expire after `days` (1-90).
+pub fn grant(target: string, kind: string, what: string, days: int, reason: string) -> string {
+    let me = actor()
+    let mt = roles_tier(me)
+    if mt < 4 {
+        return "only arches and roots may grant exceptions"
+    }
+    if not (kind == "efun" or kind == "path" or kind == "db_query") {
+        return "kind is efun, path or db_query"
+    }
+    if days < 1 or days > 90 {
+        return "grants last 1 to 90 days"
+    }
+    let tt = roles_tier(target)
+    if tt == 0 or tt >= mt {
+        return "grants go to staff below your own tier"
+    }
+    if reason == "" {
+        return "a reason is required"
+    }
+    return sent(roles_grant(target, kind, what, time() + days * 86400, reason))
+}
+
+pub fn revoke(target: string, kind: string, what: string, reason: string) -> string {
+    let me = actor()
+    let mt = roles_tier(me)
+    if mt < 4 {
+        return "only arches and roots may revoke exceptions"
+    }
+    let tt = roles_tier(target)
+    if tt >= mt {
+        return "you may only revoke grants of staff below your own tier"
+    }
+    if reason == "" {
+        return "a reason is required"
+    }
+    return sent(roles_revoke_grant(target, kind, what, reason))
+}

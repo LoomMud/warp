@@ -81,11 +81,38 @@ pub override fn attacks() -> int {
 
 // ---- state ----------------------------------------------------------------
 
-// Staff tier (0 = player). Looked up by name in /secure/staff rather than
-// stored here, so no call on a player object can raise it. S2 (OBI-36)
-// replaces this with /secure/roles backed by the R2 roles schema.
+// Staff tier (0 = player), from the roles snapshot through /secure/roles.
+// Keyed on this body's euid, which /secure/master sets to the account at
+// login (assume_account_euid), so nothing stored here can raise it.
 pub fn query_tier() -> int {
-    return load_object("/secure/staff").tier_of(name) as int
+    return load_object("/secure/roles").tier(geteuid()) as int
+}
+
+// Called by /secure/master.login_complete, during the login's own input,
+// before the connection is bound: from now on this body acts as its
+// account. The master's valid_seteuid allows this only with mudlib alone
+// on the stack and only onto an account name; the check here keeps anyone
+// but a login in progress from getting that far.
+pub fn assume_account_euid() {
+    if not (load_object("/secure/master").is_login(this_player()) as bool) {
+        return
+    }
+    if name == "" or geteuid() == name {
+        return
+    }
+    seteuid(name)
+}
+
+// Apply: the answer to a /secure/roles change this player asked for.
+fn roles_result(id: int, ok: bool, detail: string) {
+    if ok {
+        message($"[roles] Request {id} done. {detail}")
+    } else {
+        message($"[roles] Request {id} refused: {detail}")
+    }
+    if connected {
+        send(self(), editor_prompt())
+    }
 }
 
 pub fn query_class() -> string {
@@ -101,7 +128,7 @@ pub fn query_commands_run() -> int {
 }
 
 // Called once by /secure/login for a brand-new character. A name, once
-// set, never changes (the tier lookup is keyed by it).
+// set, never changes (it becomes the body's euid at login).
 pub fn setup_character(new_name: string, new_class: string) {
     if name != "" {
         return
@@ -251,7 +278,12 @@ fn run_command(input: string) {
         return
     }
     let cmd = load_object(path as string)
-    cmd.main(self(), args)
+    try {
+        cmd.main(self(), args)
+    } catch e {
+        // Security denials (valid_*, quotas, confinement) end up here.
+        message($"{verb}: {e}")
+    }
 }
 
 // Diku-style: re-send the prompt after every combat round we take part in.

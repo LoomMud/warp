@@ -27,9 +27,17 @@ pub fn player_commands() -> {string: string} {
     }
 }
 
-// Tier 2+ (builders).
+// Tier 1+ (all staff). What each may touch is up to /secure/master's
+// valid_* policy and /secure/roles' rank checks, not this table.
 pub fn builder_commands() -> {string: string} {
     return {
+        "roles": "/cmds/builder/roles",
+        "promote": "/cmds/builder/promote",
+        "demote": "/cmds/builder/demote",
+        "member": "/cmds/builder/member",
+        "grant": "/cmds/builder/grant",
+        "revoke": "/cmds/builder/revoke",
+        "approve": "/cmds/builder/approve",
         "update": "/cmds/builder/update",
         "ed": "/cmds/builder/ed",
         "clone": "/cmds/builder/clone",
@@ -51,7 +59,7 @@ pub fn find(verb: string, tier: int) -> string? {
     if verb in p {
         return p[verb]
     }
-    if tier >= 2 {
+    if tier >= 1 {
         let b = builder_commands()
         if verb in b {
             return b[verb]
@@ -69,7 +77,7 @@ pub fn find(verb: string, tier: int) -> string? {
 // Every verb available at `tier`, sorted as declared.
 pub fn verbs(tier: int) -> [string] {
     var out: [string] = keys(player_commands())
-    if tier >= 2 {
+    if tier >= 1 {
         out += keys(builder_commands())
     }
     if tier >= 4 {
