@@ -1,0 +1,23 @@
+{
+  "staff": {
+    "aragorn": 5,
+    "gandalf": 5,
+    "legolas": 3,
+    "gimli": 2,
+    "builder": 2,
+    "appr": 1
+  },
+  "domain_members": {
+    "start": {"legolas": "lead", "builder": "member"},
+    "forest": {"legolas": "lead", "gimli": "member", "builder": "member"},
+    "test": {"builder": "member"}
+  },
+  "tier_policy": {
+    "1": {"max_ticks_exec": 200000, "max_mem_exec_mb": 4, "tick_share_per_min": 20000000, "max_objects": 200, "max_heartbeats": 10, "max_callouts_obj": 8, "max_callouts_uid": 100, "disk_quota_mb": 5},
+    "2": {"max_ticks_exec": 1000000, "max_mem_exec_mb": 16, "tick_share_per_min": 200000000, "max_objects": 2000, "max_heartbeats": 200, "max_callouts_obj": 64, "max_callouts_uid": 1000, "disk_quota_mb": 50},
+    "3": {"max_ticks_exec": 2000000, "max_mem_exec_mb": 32, "tick_share_per_min": 1000000000, "max_objects": 10000, "max_heartbeats": 1000, "max_callouts_obj": 64, "max_callouts_uid": 5000, "disk_quota_mb": 200},
+    "4": {"max_ticks_exec": 5000000, "max_mem_exec_mb": 64, "tick_share_per_min": 3000000000, "max_objects": 50000, "max_heartbeats": 5000, "max_callouts_obj": 64, "max_callouts_uid": 20000, "disk_quota_mb": 1024},
+    "5": {"max_ticks_exec": 10000000, "max_mem_exec_mb": 128, "max_callouts_obj": 64, "disk_quota_mb": 1024}
+  },
+  "grants": []
+}

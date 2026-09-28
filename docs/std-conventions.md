@@ -53,8 +53,8 @@ cloning, never from literals in `create()`.
 
 Lookup tables that are really code also go in functions: `aliases()` in
 `/std/player`, the verb tables in `/secure/cmdd`, `zones()` in
-`/secure/master`, the staff list in `/secure/staff`. That way `update` changes
-them live.
+`/secure/master`, the path classes in `/secure/master.classify()`. That way
+`update` changes them live.
 
 ## Upgrades: `schema_version()` and `upgrade()`
 
@@ -111,10 +111,10 @@ input): v1 `/std/item` has `condition: int` (0–100). v2 replaces it with
 
 | Path | What |
 |---|---|
-| `/secure/master` | boot (clock, zones), `connect()`, `login_complete()` |
+| `/secure/master` | boot (clock, zones), `connect()`, `login_complete()`, the security policy (`valid_*`, `program_flags`) |
 | `/secure/login` | one clone per connecting user: account login/creation (R2), character creation |
 | `/secure/userd` | name → player object (connected or link-dead) |
-| `/secure/staff` | alpha staff tiers (interim, until S2 `/secure/roles`) |
+| `/secure/roles` | staff tiers, domains, grants and quotas (driver roles snapshot) and role changes |
 | `/secure/cmdd` | verb → command program tables |
 | `/secure/combatd` | combat pulse clock, Diku combat rounds (2 s) |
 | `/std/object` → `item` → `container`, `weapon`, `armour`, `corpse` | things |
@@ -124,6 +124,44 @@ input): v1 `/std/item` has `condition: int` (0–100). v2 replaces it with
 | `/domains/<area>/zone` + rooms, `npc/`, `obj/` | content |
 | `/domains/test/warehouse` | the E1.2 10k-clone fixture room |
 
+## Security and staff tiers (spec r5 §5.11, OBI-36)
+
+Tiers live in Postgres (`staff`, `domain_members`, `tier_policy`, `grants`).
+The driver holds them as a snapshot. `/secure/roles` is the only way into
+it, both for reading and for changing roles; nothing copies tiers into
+player variables. Without Postgres, the driver loads `LOOM_ROLES_SEED` (the
+smoke test uses `tests/roles-seed.json`).
+
+- **Who you are.** At login, `/secure/master` makes the player body run as
+  its account (`seteuid` to the account name). Every privileged efun asks
+  the master about every euid on the stack, so a builder object called from
+  a player's command gets the player's rights, not its own.
+- **Path classes** (`classify()`): `secure`, `protected` (`/std`, `/cmds`,
+  `/daemons`, `/include`), `domain_wip(d)` (`/domains/<d>/wip/**`),
+  `domain_live(d)` (the rest of `/domains/<d>/`), `workroom(u)`
+  (`/builders/<u>/`), `doc`, `data`, `other`.
+- **Writes, live:** your own workroom. T2 members also write their domains'
+  `wip/`. Leads (T3) write their whole domain and `/doc`. Arches (T4) write
+  every domain. `/secure` and protected code are never written live: they
+  change through Git review.
+- **Compiles** (`update`): T1 only in its own workroom. T2+ also compile
+  their domains, T3 also any workroom, T4 also protected code, and T5 also
+  `/secure`.
+- **Efuns:** T1–T2 get P0–P1, T3 P2, T4 P3 and T5 P4. Any account also gets
+  `disconnect` and `destruct`, because the game needs them with a player
+  on the stack (`quit`, kills, corpses). Grants (`grant`) extend a tier
+  for a single efun or path, and they expire.
+- **Quotas** (objects, heartbeats, call_outs, ticks, memory, disk) come
+  from `tier_policy`. The driver enforces them on each object's owner.
+  Player input always gets the world default of 1M ticks.
+- **Confinement:** programs under a workroom or `wip/` are `CONFINED`.
+  They never enter a live room or a tier 0 player's inventory, and players
+  never enter them.
+- **Role changes:** `promote`, `demote`, `member`, `grant`, `revoke` and
+  `approve`. `/secure/roles` checks rank first. The driver then calls the
+  audited SQL functions as the player who typed the command. Tier 4/5
+  changes need two roots: one proposes and another approves.
+
 ## Not yet (alpha limits)
 
 - **One account, one character, one name.** Passwords are checked by the
@@ -131,10 +169,5 @@ input): v1 `/std/item` has `condition: int` (0–100). v2 replaces it with
   are **not saved**. After a driver restart, logging in to an existing
   account asks for a class again.
 - **Passwords echo.** The login does not negotiate telnet `WILL ECHO` yet.
-- **Tiers are advisory** until S1/S2 (OBI-35, OBI-36) enforce them in the
-  driver. Builder commands check `query_tier() >= 2`, looked up by name in
-  `/secure/staff` and never stored on the player. `ed` allows tier 2–3
-  writes under `/domains/` and `/builders/<name>/`, and tier 4 anywhere
-  except `/secure/`. The driver confines every path to the mudlib root.
 - **`ed` edits live files.** On staging they are discarded on the next
   `WARP_REF` bump (D-P1.11).

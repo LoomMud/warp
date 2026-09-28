@@ -1,0 +1,88 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Tier smoke probe (tests/smoke.py `tiers`), installed as
+// /builders/appr/probe.wf. When an apprentice first enters it, create()
+// tries everything a tier 1 must not do and records what happened; the
+// room's description is the report.
+
+inherit /std/room
+
+var report: [string] = []
+
+pub override fn short() -> string {
+    return "Probe Room"
+}
+
+pub override fn describe() -> string {
+    return "Report: " + join(report, " ")
+}
+
+fn attempt_write(label: string, path: string) {
+    try {
+        write_file(path, "probe\n")
+        report += [$"{label}:ok"]
+    } catch {
+        report += [$"{label}:denied"]
+    }
+}
+
+pub fn noop() {
+}
+
+override fn create() {
+    attempt_write("write-live", "/domains/start/pwned.txt")
+    attempt_write("write-std", "/std/pwned.txt")
+    attempt_write("write-other-workroom", "/builders/builder/pwned.txt")
+    attempt_write("write-own", "/builders/appr/notes.txt")
+    try {
+        compile_object("/std/item")
+        report += ["compile-std:ok"]
+    } catch {
+        report += ["compile-std:denied"]
+    }
+    try {
+        read_file("/secure/master.wf")
+        report += ["read-secure:ok"]
+    } catch {
+        report += ["read-secure:denied"]
+    }
+    try {
+        seteuid("aragorn")
+        report += ["seteuid:ok"]
+    } catch {
+        report += ["seteuid:denied"]
+    }
+    try {
+        roles_set_tier("appr", 5, "probe")
+        report += ["roles-efun:ok"]
+    } catch {
+        report += ["roles-efun:denied"]
+    }
+    let why = load_object("/secure/roles").set_tier("appr", 5, "probe") as string
+    if why == "" {
+        report += ["roles-facade:ok"]
+    } else {
+        report += ["roles-facade:refused"]
+    }
+    // max_objects (tier 1: 200), charged to the owner: us.
+    var made = 0
+    try {
+        while made < 300 {
+            clone_object("/builders/appr/box")
+            made += 1
+        }
+    } catch {
+    }
+    report += [$"clones:{made}"]
+    // max_callouts_obj (tier 1: 8).
+    var scheduled = 0
+    try {
+        while scheduled < 20 {
+            call_out("noop", 600)
+            scheduled += 1
+        }
+    } catch {
+    }
+    report += [$"callouts:{scheduled}"]
+}
