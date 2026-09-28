@@ -409,6 +409,28 @@ def scenario_tiers(server):
         c.close()
 
 
+def scenario_reserved_names(server):
+    """OBI-155 (E1.3 finding, D-S3.1): the login prompt refuses to create an
+    account named `root`/`mudlib`/other reserved names, so a player can
+    never register the uid the driver would treat as a trusted principal.
+    An ordinary name is unaffected."""
+    c = Client(server, "reserved-name-check")
+    c.expect(r"By what name")
+    c.send("root")
+    c.expect(r"Names are 3 to 16 letters, a to z\.")
+    c.expect(r"By what name")
+    c.send("mudlib")
+    c.expect(r"Names are 3 to 16 letters, a to z\.")
+    c.expect(r"By what name")
+    c.send("admin")
+    c.expect(r"Names are 3 to 16 letters, a to z\.")
+    c.expect(r"By what name")
+    # An ordinary name still works after the refusals above.
+    c.send("notreserved")
+    c.expect(r"Password: ")
+    c.close()
+
+
 SCENARIOS = {
     "basics": (scenario_basics, False),
     "builder": (scenario_builder, False),
@@ -417,6 +439,7 @@ SCENARIOS = {
     "combat": (scenario_combat, True),
     "item10k": (scenario_item10k, False),  # runs on a private copy
     "tiers": (scenario_tiers, False),  # runs on a private copy
+    "reserved_names": (scenario_reserved_names, False),
 }
 
 

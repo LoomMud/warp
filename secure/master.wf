@@ -292,7 +292,19 @@ pub fn can_upgrade(who: string, path: string) -> bool {
     return can_compile(who, path)
 }
 
-// An account uid as created by /secure/login: 3-16 letters a-z.
+// Names that must never become an account uid, because they either name a
+// trusted principal (`root`, `mudlib`), a role that implies one (`admin`),
+// or a path-class keyword that a `valid_*` apply or /secure code could
+// mistake for something else (`builders`, `domain`). This is defence in
+// depth (D-S3.1, OBI-155): the driver itself refuses seteuid onto
+// root/mudlib/`*:*` regardless of what the mudlib says, but an account
+// named one of these should never exist in the first place.
+pub fn reserved_account_names() -> [string] {
+    return ["root", "mudlib", "admin", "builders", "domain"]
+}
+
+// An account uid as created by /secure/login: 3-16 letters a-z, and not one
+// of reserved_account_names() (OBI-155).
 pub fn is_account_name(n: string) -> bool {
     if len(n) < 3 or len(n) > 16 {
         return false
@@ -304,6 +316,9 @@ pub fn is_account_name(n: string) -> bool {
             return false
         }
         i += 1
+    }
+    if n in reserved_account_names() {
+        return false
     }
     return true
 }
