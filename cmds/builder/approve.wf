@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// approve <id>: root command. Second-root approval of a tier 4/5 proposal.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "approve <proposal id>: approve another root's tier 4/5 proposal."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let id = to_int(trim(args)) ?? -1
+    if id < 0 {
+        me.message(help())
+        return true
+    }
+    let err = load_object("/secure/roles").approve(id) as string
+    if err != "" {
+        me.message($"Refused: {err}.")
+    } else {
+        me.message($"Approval of proposal {id} sent.")
+    }
+    return true
+}

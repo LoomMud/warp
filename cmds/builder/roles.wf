@@ -1,0 +1,45 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// roles [<name>]: staff command (tier 1+). Shows a tier, its domains and
+// its quotas from the roles snapshot (/secure/roles).
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "roles [<name>]: show a staff member's tier, domains and quotas."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    var who = lower(trim(args))
+    if who == "" {
+        who = me.query_name() as string
+    }
+    let r = load_object("/secure/roles")
+    let t = r.tier(who) as int
+    var text = $"{capitalize(who)}: tier {t} ({r.tier_name(t)})"
+    let ds = r.domains(who) as [string]
+    if len(ds) > 0 {
+        var parts: [string] = []
+        for d in ds {
+            if r.lead(who, d) as bool {
+                parts += [$"{d} (lead)"]
+            } else {
+                parts += [d]
+            }
+        }
+        text += $"\nDomains: {join(parts, ", ")}"
+    }
+    let p = r.policy(who) as {string: int}
+    if len(p) > 0 {
+        var qs: [string] = []
+        for k in ["max_objects", "max_heartbeats", "max_callouts_obj", "max_callouts_uid", "max_ticks_exec", "max_mem_exec_mb", "tick_share_per_min", "disk_quota_mb"] {
+            if k in p {
+                qs += [$"{k} {p[k] ?? 0}"]
+            }
+        }
+        text += $"\nQuotas: {join(qs, ", ")}"
+    }
+    me.message(text)
+    return true
+}

@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Oberfield
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// ed <path>: builder command (tier 2+). Opens /std/editor on a .wf or .txt
-// file. Where a builder may write (interim, until S2's valid_write):
-// tier 2-3 under /domains/ and /builders/<name>/, tier 4 anywhere except
-// /secure/. The driver also confines every path to the mudlib root.
+// ed <path>: staff command. Opens /std/editor on a .wf or .txt file.
+// Where you may write is /secure/master's live-write policy (spec r5
+// §5.11.2): your own workroom, domain wip/live by membership and tier, and
+// never /secure or protected code (those change through Git review). The
+// driver asks the master again on every write_file.
 
 inherit /std/command
 
@@ -13,22 +14,7 @@ pub override fn help() -> string {
 }
 
 pub fn may_edit(me: object, path: string) -> bool {
-    let tier = me.query_tier() as int
-    let parts = split(path, "/")
-    if len(parts) < 3 or ".." in path {
-        return false
-    }
-    let top = parts[1]
-    if top == "secure" {
-        return false
-    }
-    if tier >= 4 {
-        return true
-    }
-    if top == "domains" {
-        return true
-    }
-    return top == "builders" and parts[2] == (me.query_name() as string)
+    return load_object("/secure/master").can_write(me.query_name(), path) as bool
 }
 
 pub override fn main(me: object, args: string) -> bool {
