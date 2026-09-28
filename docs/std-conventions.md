@@ -148,9 +148,12 @@ smoke test uses `tests/roles-seed.json`).
   their domains, T3 also any workroom, T4 also protected code, and T5 also
   `/secure`.
 - **Efuns:** T1–T2 get P0–P1, T3 P2, T4 P3 and T5 P4. Any account also gets
-  `disconnect` and `destruct`, because the game needs them with a player
-  on the stack (`quit`, kills, corpses). Grants (`grant`) extend a tier
-  for a single efun or path, and they expire.
+  `disconnect`, because the game needs it with a player on the stack
+  (`quit`). `destruct(self())` needs no grant at any tier: it is a driver
+  rule (loom OBI-149), not master policy, so `remove()` -> `destruct(self())`
+  (kills, corpses, `dest`) always works. `destruct` on a *different* object
+  is still P2 (T3+, or a time-boxed grant below that). Grants (`grant`)
+  extend a tier for a single efun or path, and they expire.
 - **Quotas** (objects, heartbeats, call_outs, ticks, memory, disk) come
   from `tier_policy`. The driver enforces them on each object's owner.
   Player input always gets the world default of 1M ticks.

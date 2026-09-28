@@ -13,3 +13,10 @@ pub override fn short() -> string {
 pub override fn ids() -> [string] {
     return ["box"]
 }
+
+// OBI-154: called on a clone via call_other, so self() inside this frame
+// is the clone itself -- exactly the P0 destruct(self()) case (loom
+// OBI-149), not a call to destruct some other object.
+pub fn self_destruct() {
+    destruct(self())
+}

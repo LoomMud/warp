@@ -153,9 +153,14 @@ pub fn max_class(tier: int) -> int {
 }
 
 // P2 efuns the ordinary game needs with any account on the stack: `quit`
-// disconnects, and remove() destructs NPCs a player kills and corpses.
+// disconnects. `destruct` no longer belongs here (OBI-154): the driver now
+// treats destruct(self()) as a P0 rule (loom OBI-149, `b6260ba`), so
+// remove() -> destruct(self()) (NPC kills, corpses, `dest`) works for any
+// tier without an efun grant. Destructing an object other than the
+// caller's own self() stays P2, gated by max_class(tier) below (tier 3+)
+// or a time-boxed `grant <name> efun destruct ...` for anyone lower.
 pub fn account_efuns() -> [string] {
-    return ["disconnect", "destruct"]
+    return ["disconnect"]
 }
 
 pub fn can_efun(who: string, name: string, class: int) -> bool {

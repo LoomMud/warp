@@ -382,7 +382,8 @@ def scenario_tiers(server):
     report = m.group(1)
     for want in ("write-live:denied", "write-std:denied", "write-other-workroom:denied",
                  "write-own:ok", "compile-std:denied", "read-secure:denied",
-                 "seteuid:denied", "roles-efun:denied", "roles-facade:refused"):
+                 "seteuid:denied", "roles-efun:denied", "roles-facade:refused",
+                 "destruct-self:ok:true", "destruct-other:denied"):
         assert want in report, f"{want!r} not in report: {report}"
     clones = int(re.search(r"clones:(\d+)", report).group(1))
     assert 150 <= clones < 200, f"max_objects 200 not enforced: {report}"
