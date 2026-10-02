@@ -15,10 +15,14 @@
 
 inherit /std/object
 
-var hp: int = -1
+// `persistent` vars are what save_object() writes for a player (OBI-172,
+// /std/player save_character). hp_at is a combatd clock reading, which
+// restarts from zero with the driver, so it is never saved: the player
+// folds regeneration into hp before saving and rebases hp_at on restore.
+persistent var hp: int = -1
 var hp_at: int = 0
-var level: int = 1
-var xp: int = 0
+persistent var level: int = 1
+persistent var xp: int = 0
 var fighting: object? = null
 var wielded: object? = null
 var worn: {string: object} = {:}

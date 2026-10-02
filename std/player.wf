@@ -6,11 +6,27 @@
 // bare exit names walk. After every command it sends a prompt without a
 // trailing newline ("<hp/maxhp> "), which is also the end-of-output marker
 // the load bot (loadbot/README.md) waits for.
+//
+// Persistence (OBI-172, loom save_object/restore_object, OBI-171): the
+// `persistent` vars here and in /std/living and /std/object are saved to
+// /players/<name> in the driver's save root (not the mudlib tree). The
+// driver calls autosave() every 5 minutes while connected and once more on
+// every disconnect (quit or net-dead). /secure/login restores a character
+// that is not in memory (after a restart) with restore_character(). Object
+// references never survive a restart, so location and inventory are saved
+// as program paths (saved_room, saved_items) and rebuilt on restore.
 
 inherit /std/living
 
 var connected: bool = false
-var class_name: string = "adventurer"
+persistent var class_name: string = "adventurer"
+// Where the player was at the last save: a room's program path, "" if none.
+persistent var saved_room: string = ""
+// Carried items at the last save, one map per item: "path" (program),
+// "condition" (int) and "eq" ("wield", "wear" or "").
+persistent var saved_items: [{string: any}] = []
+// True for a body rebuilt from a save since boot, until it enters the world.
+var restored: bool = false
 // Active `ed` session (/std/editor clone), if any.
 var editor: object? = null
 var commands_run: int = 0
@@ -180,6 +196,127 @@ pub fn editor_prompt() -> string {
     return prompt()
 }
 
+// ---- persistence (OBI-172) --------------------------------------------------
+
+// The character's save path. The master's valid_read/valid_write allow
+// save_object/restore_object only on /players/<account>, and an account
+// only on its own (secure/master.wf can_save).
+pub fn save_path() -> string {
+    return $"/players/{name}"
+}
+
+// Apply (loom OBI-171): every 5 minutes while connected, and on every
+// disconnect (an explicit quit and a dropped link both land here).
+fn autosave() {
+    save_character()
+}
+
+// Write the character to its save file. Not `pub`: only the driver's
+// autosave() and this body itself decide when it is saved.
+fn save_character() -> bool {
+    if name == "" {
+        return false
+    }
+    // Fold regeneration so far into hp: hp_at is not saved.
+    if hp >= 0 {
+        set_hp(query_hp())
+    }
+    let env = environment()
+    if env != null {
+        let room = object_name(env)
+        // A clone (a room made with `clone`) cannot be reloaded by path.
+        if not ("#" in room) {
+            saved_room = room
+        }
+    }
+    var items: [{string: any}] = []
+    let w = query_wielded()
+    for ob in inventory(self()) {
+        var eq = ""
+        if ob == w {
+            eq = "wield"
+        } else if is_equipped(ob) {
+            eq = "wear"
+        }
+        // Only /std/item has a condition; anything else saves as 100.
+        var cond = 100
+        try {
+            cond = ob.query_condition() as int
+        } catch e {
+            cond = 100
+        }
+        items += [{"path": split(object_name(ob), "#")[0], "condition": cond, "eq": eq}]
+    }
+    saved_items = items
+    return save_object(save_path())
+}
+
+// Called by /secure/login, on a fresh /std/player clone, for an account
+// whose character is not in memory (a restart since it last played).
+// Returns false, leaving the body blank, if there is no usable save.
+pub fn restore_character(who: string) -> bool {
+    if not (load_object("/secure/master").is_login(this_player()) as bool) {
+        return false
+    }
+    if name != "" {
+        return false
+    }
+    name = who
+    if not restore_object(save_path()) or name != who {
+        name = ""
+        return false
+    }
+    // Rebase the regeneration clock on this boot's combatd clock.
+    if hp >= 0 {
+        set_hp(hp)
+    }
+    for rec in saved_items {
+        restore_item(rec)
+    }
+    restored = true
+    return true
+}
+
+// Re-create one saved item in our inventory. Items whose program is gone,
+// fails to compile, or may not enter a player's inventory are skipped.
+fn restore_item(rec: {string: any}) {
+    let path = (rec["path"] ?? "") as string
+    if path == "" {
+        return
+    }
+    try {
+        let ob = clone_object(path)
+        ob.move(self())
+        let cond = (rec["condition"] ?? 100) as int
+        if cond < 100 {
+            ob.wear_down(100 - cond)
+        }
+        let eq = (rec["eq"] ?? "") as string
+        if eq == "wield" {
+            wield(ob)
+        } else if eq == "wear" {
+            wear(ob)
+        }
+    } catch e {
+    }
+}
+
+// The room a restored character comes back to: its saved room if that
+// still loads (and admits it), else the start room.
+fn return_to_saved_room() -> object {
+    if saved_room != "" {
+        try {
+            let room = load_object(saved_room)
+            move_to(room)
+            return room
+        } catch e {
+        }
+    }
+    let start = load_object(start_room())
+    move_to(start)
+    return start
+}
+
 // ---- connection lifecycle (called by /secure/master) ---------------------
 
 // The connection has just been bound to us (new login or reconnect).
@@ -188,6 +325,11 @@ pub fn enter_world(reconnected: bool) {
     if reconnected {
         message("You take over your body again.")
         environment()?.tell($"{cap_name()} has reconnected.", self())
+    } else if restored {
+        restored = false
+        message($"Welcome back to Oberfield, {cap_name()} the {class_name}.")
+        let room = return_to_saved_room()
+        room.tell($"{cap_name()} arrives in a puff of smoke.", self())
     } else {
         message($"Welcome to Oberfield, {cap_name()} the {class_name}.")
         message("Type `help` for a list of commands.")

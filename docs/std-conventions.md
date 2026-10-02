@@ -149,7 +149,8 @@ smoke test uses `tests/roles-seed.json`).
   `/secure`.
 - **Efuns:** T1–T2 get P0–P1, T3 P2, T4 P3 and T5 P4. Any account also gets
   `disconnect`, because the game needs it with a player on the stack
-  (`quit`). `destruct(self())` needs no grant at any tier: it is a driver
+  (`quit`), and `save_object`, because a body saves itself as its account
+  (see "Character saves"). `destruct(self())` needs no grant at any tier: it is a driver
   rule (loom OBI-149), not master policy, so `remove()` -> `destruct(self())`
   (kills, corpses, `dest`) always works. `destruct` on a *different* object
   is still P2 (T3+, or a time-boxed grant below that). Grants (`grant`)
@@ -165,12 +166,39 @@ smoke test uses `tests/roles-seed.json`).
   audited SQL functions as the player who typed the command. Tier 4/5
   changes need two roots: one proposes and another approves.
 
+## Character saves (OBI-172)
+
+A character is saved with loom's `save_object` (loom `docs/save-objects.md`)
+to `/players/<account>` in the driver's save root (`--save-dir` /
+`LOOM_SAVE_DIR`, default `<mudlib>/../saves`), never in the mudlib tree.
+
+- **What is saved:** the `persistent var`s of `/std/object` (`name`),
+  `/std/living` (`hp`, `level`, `xp`) and `/std/player` (`class_name`,
+  `saved_room`, `saved_items`). Object references do not survive a restart,
+  so the room is saved as its program path and each carried item as
+  `{path, condition, eq}`; restore clones them again and re-wields/re-wears.
+  Items inside carried containers and per-clone state other than
+  `condition` are not saved yet.
+- **When:** the driver calls `autosave()` every 5 minutes while connected
+  and on every disconnect (`quit`, a dropped link, and the shutdown drain
+  when the driver stops).
+- **Restore:** `/secure/login` restores an account whose character is not
+  in memory (`restore_character`) and brings it back to its saved room,
+  or the start room if that room no longer loads. No save means a new
+  character (class prompt).
+- **Who may touch a save:** `/secure/master` `can_save()`. The path must be
+  `/players/<account>`; root and mudlib may name any account, an account
+  only its own, a domain none. VFS read/write rules and path grants do not
+  apply. Adding a `persistent var` is a schema change: old saves restore
+  into it by name, and `upgrade()` handles type changes (D-P1.4 rules).
+- **Known limit:** staff who can compile code (tier 1+) can write an object
+  that inherits `/std/player` and saves it over their *own* save file. It
+  cannot reach anyone else's save.
+
 ## Not yet (alpha limits)
 
 - **One account, one character, one name.** Passwords are checked by the
-  driver against R2 accounts (Argon2, off the world thread), but characters
-  are **not saved**. After a driver restart, logging in to an existing
-  account asks for a class again.
+  driver against R2 accounts (Argon2, off the world thread).
 - **Passwords echo.** The login does not negotiate telnet `WILL ECHO` yet.
 - **`ed` edits live files.** On staging they are discarded on the next
   `WARP_REF` bump (D-P1.11).

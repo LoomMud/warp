@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // /secure/userd: character name -> player object, for every character
-// created since boot (connected or link-dead). Player state is not saved
-// across driver restarts yet (see docs/std-conventions.md, "Not yet").
+// created or restored since boot (connected or link-dead). Characters not
+// in memory are restored from their save by /secure/login
+// (docs/std-conventions.md, "Character saves").
 
 var players: {string: object} = {:}
 

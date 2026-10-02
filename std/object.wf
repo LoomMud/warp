@@ -9,7 +9,8 @@
 // Variables hold per-instance mutable state only.
 
 // Per-instance name override (players, renamed clones). Empty = use short().
-var name: string = ""
+// Persistent: a player's name is saved with the character (OBI-172).
+persistent var name: string = ""
 
 // Apply: runs once after load/clone. Never re-run on update.
 fn create() {
