@@ -40,6 +40,7 @@ pub fn builder_commands() -> {string: string} {
         "approve": "/cmds/builder/approve",
         "update": "/cmds/builder/update",
         "ed": "/cmds/builder/ed",
+        "propose": "/cmds/builder/propose",
         "clone": "/cmds/builder/clone",
         "dest": "/cmds/builder/dest",
         "goto": "/cmds/builder/goto",
