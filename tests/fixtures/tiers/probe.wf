@@ -59,6 +59,27 @@ override fn create() {
     } catch {
         report += ["roles-efun:denied"]
     }
+    // OBI-172: another account's character save is out of reach, for
+    // writing and for reading into this object (restore_object is P0, so
+    // only the master's can_save stands in the way).
+    try {
+        save_object("/players/builder")
+        report += ["save-other:ok"]
+    } catch {
+        report += ["save-other:denied"]
+    }
+    try {
+        restore_object("/players/builder")
+        report += ["restore-other:ok"]
+    } catch {
+        report += ["restore-other:denied"]
+    }
+    try {
+        save_object("/builders/appr/probe")
+        report += ["save-vfs-path:ok"]
+    } catch {
+        report += ["save-vfs-path:denied"]
+    }
     let why = load_object("/secure/roles").set_tier("appr", 5, "probe") as string
     if why == "" {
         report += ["roles-facade:ok"]
