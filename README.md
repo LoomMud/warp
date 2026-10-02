@@ -16,6 +16,10 @@ loom-cli serve --mudlib .            # telnet to $LOOM_TELNET_ADDR (default 127.
 LOOM_CLI=loom-cli tests/smoke.py     # scripted end-to-end check (seeds tiers itself; ignores DATABASE_URL)
 ```
 
+Characters are saved (OBI-172) under the driver's save root (`LOOM_SAVE_DIR`); see "Character saves" in
+[`docs/std-conventions.md`](docs/std-conventions.md). The `persist` smoke scenario restarts the driver and needs
+accounts that survive it, so it runs only with `LOOM_SMOKE_DATABASE_URL` set.
+
 Pick a name and password (an R2 account), choose a class (warrior or rogue), and type `help`. The Goblin Wood lies east of the hall.
 Staff (tiers 1-5 in the roles tables, see `/secure/roles`) also get `update`, `ed`, `clone`, `dest`, `goto`, `reset`
 and the role commands. What each tier may touch is `/secure/master`'s policy ([`docs/std-conventions.md`](docs/std-conventions.md)).

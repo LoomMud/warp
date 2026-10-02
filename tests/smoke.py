@@ -36,10 +36,15 @@ def free_port():
 
 
 class Server:
-    def __init__(self, root=ROOT):
+    def __init__(self, root=ROOT, save_dir=None):
         self.root = root
         self.port = free_port()
         env = dict(os.environ, LOOM_TELNET_ADDR=f"127.0.0.1:{self.port}")
+        # Character saves (OBI-172) go to a scratch dir, never next to the
+        # checkout (the driver's default is <mudlib>/../saves).
+        self.own_save_dir = save_dir is None
+        self.save_dir = save_dir or tempfile.mkdtemp(prefix="warp-saves-")
+        env["LOOM_SAVE_DIR"] = self.save_dir
         # Staff tiers without Postgres (OBI-36): the driver loads this
         # snapshot at boot; see tests/roles-seed.json.
         env.setdefault("LOOM_ROLES_SEED", os.path.join(ROOT, "tests", "roles-seed.json"))
@@ -68,12 +73,14 @@ class Server:
                 time.sleep(0.1)
         raise SystemExit("loom serve did not start listening")
 
-    def stop(self):
+    def stop(self, keep_saves=False):
         self.proc.terminate()
         try:
-            self.proc.wait(5)
+            self.proc.wait(10)
         except subprocess.TimeoutExpired:
             self.proc.kill()
+        if self.own_save_dir and not keep_saves:
+            shutil.rmtree(self.save_dir, ignore_errors=True)
 
 
 class Client:
@@ -147,7 +154,7 @@ def login(server, name, cls="warrior", password=PASSWORD):
     c.send(name)
     c.expect(r"Password: ")
     c.send(password)
-    m = c.expect(r"Create a new character|You take over|Choose a class", timeout=15)
+    m = c.expect(r"Create a new character|You take over|Choose a class|Welcome back", timeout=15)
     if m.group(0).startswith("Create"):
         c.send("yes")
         c.expect(r"Choose a password")
@@ -431,6 +438,79 @@ def scenario_reserved_names(server):
     c.close()
 
 
+def scenario_persist(server):
+    """M2.1 / OBI-172: a character (stats, inventory, equipment, location)
+    survives quit, a dropped link, being connected at shutdown, and a
+    driver restart. Accounts must
+    survive the restart too, so this needs LOOM_SMOKE_DATABASE_URL (a
+    migrated loom database); without it the scenario is skipped."""
+    save_dir = server.save_dir
+    k = login(server, "keeper", "rogue")
+    k.cmd("e", r"Edge of the Wood")
+    k.cmd("get stick", r"You take a heavy stick")
+    k.cmd("wield stick", r"You wield a heavy stick")
+    if HAS_TICK:
+        k.cmd("e", r"Forest Path.*brown rabbit")
+        k.cmd("kill rabbit", r"You attack the brown rabbit")
+        k.expect(r"The brown rabbit is dead! You gain \d+ experience", timeout=40)
+        k.expect(r"<\d+/\d+hp> ")
+    m = k.cmd("score", r"Keeper the rogue, level (\d+)\.\nHit points: (\d+)/\d+.*?"
+                       r"Experience: (\d+).*?Wielding: a heavy stick")
+    level, xp = m.group(1), m.group(3)
+    m = k.cmd("look", r"((?:An? |The )?(?:Edge of the Wood|Forest Path))\n")
+    room = m.group(1)
+    k.cmd("quit", r"Goodbye")
+    k.close()
+    # A dropped link (no quit) saves too.
+    d = login(server, "drifter")
+    d.cmd("north", r"A Walled Garden")
+    d.sock.close()
+    deadline = time.time() + 5
+    while time.time() < deadline and not all(
+            os.path.exists(os.path.join(save_dir, "players", f"{n}.o"))
+            for n in ("keeper", "drifter")):
+        time.sleep(0.1)
+    for n in ("keeper", "drifter"):
+        path = os.path.join(save_dir, "players", f"{n}.o")
+        assert os.path.exists(path), f"no save file for {n} in {save_dir}"
+    # Still connected when the driver stops: the shutdown drain disconnects
+    # it, which saves it like any other disconnect.
+    st = login(server, "stayer")
+    st.cmd("north", r"A Walled Garden")
+    st.cmd("get bench", r"can't take")
+    # Restart the driver on the same save dir and database.
+    server.stop(keep_saves=True)
+    st.close()
+    assert os.path.exists(os.path.join(save_dir, "players", "stayer.o")), \
+        "a player connected at shutdown was not saved"
+    again = Server(server.root, save_dir=save_dir)
+    try:
+        k = Client(again, "keeper-again")
+        k.expect(r"By what name")
+        k.send("keeper")
+        k.expect(r"Password: ")
+        k.send(PASSWORD)
+        k.expect(r"Welcome back to Oberfield, Keeper the rogue", timeout=15)
+        k.expect(rf"{room}\n")
+        k.expect(r"<\d+/\d+hp> ")
+        k.cmd("score", rf"Keeper the rogue, level {level}\.\nHit points: \d+/\d+.*?"
+                       rf"Experience: {xp} .*?Wielding: a heavy stick")
+        k.cmd("i", r"a heavy stick \(wielded\)")
+        d = Client(again, "drifter-again")
+        d.expect(r"By what name")
+        d.send("drifter")
+        d.expect(r"Password: ")
+        d.send(PASSWORD)
+        d.expect(r"Welcome back to Oberfield, Drifter the warrior", timeout=15)
+        d.expect(r"A Walled Garden")
+        s = login(again, "stayer")
+        s.cmd("look", r"A Walled Garden")
+        for c in (k, d, s):
+            c.close()
+    finally:
+        again.stop(keep_saves=True)
+
+
 SCENARIOS = {
     "basics": (scenario_basics, False),
     "builder": (scenario_builder, False),
@@ -440,17 +520,21 @@ SCENARIOS = {
     "item10k": (scenario_item10k, False),  # runs on a private copy
     "tiers": (scenario_tiers, False),  # runs on a private copy
     "reserved_names": (scenario_reserved_names, False),
+    "persist": (scenario_persist, False),  # restarts its own server
 }
 
 
 # Scenarios that modify mudlib files get their own server on a scratch copy.
-PRIVATE = {"item10k", "tiers"}
+PRIVATE = {"item10k", "tiers", "persist"}
 
 
 def run(n, server):
     fn, needs_tick = SCENARIOS[n]
     if needs_tick and not HAS_TICK:
         print(f"SKIP {n} (needs the world tick, OBI-82)")
+        return True
+    if n == "persist" and not os.environ.get("LOOM_SMOKE_DATABASE_URL"):
+        print(f"SKIP {n} (accounts must survive a restart: set LOOM_SMOKE_DATABASE_URL)")
         return True
     t0 = time.time()
     try:
@@ -482,6 +566,7 @@ def main():
                 failed += not run(n, server)
             finally:
                 server.stop()
+                shutil.rmtree(server.save_dir, ignore_errors=True)
                 shutil.rmtree(tmp)
     sys.exit(1 if failed else 0)
 

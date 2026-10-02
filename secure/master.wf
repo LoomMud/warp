@@ -159,8 +159,11 @@ pub fn max_class(tier: int) -> int {
 // tier without an efun grant. Destructing an object other than the
 // caller's own self() stays P2, gated by max_class(tier) below (tier 3+)
 // or a time-boxed `grant <name> efun destruct ...` for anyone lower.
+// `save_object` (P1, OBI-172) is how a player's body saves itself (autosave
+// runs with the account on the stack); can_save() below confines it to the
+// account's own save file.
 pub fn account_efuns() -> [string] {
-    return ["disconnect"]
+    return ["disconnect", "save_object"]
 }
 
 pub fn can_efun(who: string, name: string, class: int) -> bool {
@@ -323,15 +326,46 @@ pub fn is_account_name(n: string) -> bool {
     return true
 }
 
+// save_object/restore_object (loom OBI-171, docs/save-objects.md). Their
+// path is in the driver's save namespace, not the mudlib tree, so none of
+// the VFS rules above apply: a tier-4 "read anything" or a path grant must
+// never reach another player's save. Warp keeps one save per account at
+// /players/<account>. Trusted code (root, mudlib: /std/player's autosave
+// and /secure/login's restore) may name any account's file; an account
+// only its own; a domain none. Every account on the stack is asked too,
+// so a builder's code cannot use /std/player to reach someone else's.
+pub fn can_save(who: string, path: string) -> bool {
+    let parts = split(path, "/")
+    if len(parts) != 3 or parts[0] != "" or parts[1] != "players" {
+        return false
+    }
+    if not is_account_name(parts[2]) {
+        return false
+    }
+    if who == "root" or who == "mudlib" {
+        return true
+    }
+    if is_domain_uid(who) {
+        return false
+    }
+    return parts[2] == who
+}
+
 fn valid_efun(name: string, class: int, ob: object) -> bool {
     return can_efun(effective_principal(), name, class)
 }
 
 fn valid_read(path: string, ob: object, op: string) -> bool {
+    if op == "restore_object" {
+        return can_save(effective_principal(), path)
+    }
     return can_read(effective_principal(), path)
 }
 
 fn valid_write(path: string, ob: object, op: string) -> bool {
+    if op == "save_object" {
+        return can_save(effective_principal(), path)
+    }
     return can_write(effective_principal(), path)
 }
 

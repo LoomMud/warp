@@ -8,7 +8,8 @@
 //
 //   name -> password -> account_login
 //     ok, character in memory      -> reconnect (unless it is connected)
-//     ok, no character since boot  -> class -> new character
+//     ok, no character since boot  -> restore from save (OBI-172)
+//                                     -> or, with no save, class -> new
 //     bad_credentials              -> "create X?" -> new password twice
 //                                     -> account_create -> class
 //
@@ -186,9 +187,16 @@ fn logged_in(created: bool) {
     }
     if created {
         message($"Account {capitalize(wanted)} created.")
+    } else {
+        // A valid account with no character in memory: restore its save
+        // (OBI-172) if it has one, else it is a character never saved.
+        let body = clone_object("/std/player")
+        if body.restore_character(wanted) as bool {
+            load_object("/secure/master").login_complete(self(), body, false)
+            return
+        }
+        body.remove()
     }
-    // A valid account with no character in memory (new, or after a driver
-    // restart: characters are not saved yet).
     state = "class"
     ask($"Choose a class ({join(classes(), ", ")}): ")
 }
