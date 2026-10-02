@@ -209,14 +209,19 @@ pub fn can_read(who: string, path: string) -> bool {
     return ok or path_granted(who, path)
 }
 
-// Live writes (§5.11.2 "Write, live"). /secure and protected code change
-// only through Git review, never live, for everyone but root.
+// Live writes (§5.11.2 "Write, live"; OBI-181 design §3 R2). /secure and
+// protected code change only through Git review (`propose` or a PR), never
+// live, for every principal and tier: not root, not a T5, not a path grant.
+// A T5 writes live only in its own workroom; everything else it proposes.
 pub fn can_write(who: string, path: string) -> bool {
+    let c = classify(path)
+    let cls = c[0]
+    if cls == "secure" or cls == "protected" {
+        return false
+    }
     if who == "root" {
         return true
     }
-    let c = classify(path)
-    let cls = c[0]
     if who == "mudlib" {
         return cls == "workroom" or cls == "domain_live" or cls == "domain_wip" or cls == "doc"
     }
@@ -226,7 +231,9 @@ pub fn can_write(who: string, path: string) -> bool {
     let r = roles()
     let t = r.tier(who) as int
     var ok = false
-    if t >= 1 {
+    if t >= 5 {
+        ok = cls == "workroom" and c[1] == who
+    } else if t >= 1 {
         if cls == "workroom" {
             ok = c[1] == who
         } else if cls == "domain_wip" {
@@ -238,6 +245,49 @@ pub fn can_write(who: string, path: string) -> bool {
         }
     }
     return ok or path_granted(who, path)
+}
+
+// Review writes (§5.11.2 "Write, via review"; OBI-181 design §3): may `who`
+// open a `propose` PR that adds or changes `path` on warp `main`? Anything
+// it may write live it may also send to main, plus the review-only cells.
+// This only gates who may *open* a PR; approval is CODEOWNERS + branch
+// protection on GitHub. Only staff accounts propose: never root, mudlib or
+// a domain principal (the driver's own code has no business opening PRs).
+//   R1 workrooms are never proposed (they live on live/<env> only).
+//   R4 a T1 proposes only into a wip of a domain it is a member of.
+pub fn can_propose(who: string, path: string) -> bool {
+    if who == "root" or who == "mudlib" or is_domain_uid(who) {
+        return false
+    }
+    let c = classify(path)
+    let cls = c[0]
+    if cls == "workroom" or cls == "data" or cls == "other" {
+        return false
+    }
+    let r = roles()
+    let t = r.tier(who) as int
+    if t < 1 {
+        return false
+    }
+    if can_write(who, path) {
+        return true
+    }
+    if cls == "domain_wip" {
+        return (r.member(who, c[1]) as bool) or t >= 4
+    }
+    if cls == "domain_live" {
+        return (t >= 2 and (r.member(who, c[1]) as bool)) or t >= 4
+    }
+    if cls == "doc" {
+        return t >= 2
+    }
+    if cls == "protected" {
+        return t >= 3
+    }
+    if cls == "secure" {
+        return t >= 4
+    }
+    return false
 }
 
 // Compiling reloads what is on disk (reviewed code) into the running game.
@@ -333,6 +383,12 @@ fn valid_read(path: string, ob: object, op: string) -> bool {
 
 fn valid_write(path: string, ob: object, op: string) -> bool {
     return can_write(effective_principal(), path)
+}
+
+// Asked by the driver's `git_propose` (OBI-181 B3.3) once per *target*
+// path of a proposal, after valid_read on every source path.
+fn valid_propose(path: string, ob: object) -> bool {
+    return can_propose(effective_principal(), path)
 }
 
 fn valid_compile(path: string, ob: object) -> bool {

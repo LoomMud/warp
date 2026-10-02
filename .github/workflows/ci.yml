@@ -49,3 +49,40 @@ jobs:
           "$workdir/gitleaks" git --redact --exit-code 1 .
       - uses: fsfe/reuse-action@v5
   # Phase 1: `loom check`, `loom test` and the boot test against the pinned GHCR image (spec §8.5).
+  loom-check:
+    # OBI-181 (P2-B3, F2): a merge to main is pulled by the running driver
+    # and recompiled, so main must always compile. Builds loom-cli from a
+    # pinned loom commit (the GHCR image is private until OBI-109) and runs
+    # the same gates as scripts/ci-local.sh: `loom check --deny-warnings`
+    # and the end-to-end smoke suite. Bump LOOM_REF when warp needs a newer
+    # driver (efuns, applies); keep it at or below the LOOM_IMAGE staging runs.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || vars.CI_RUNS_ON && (startsWith(vars.CI_RUNS_ON, '[') && fromJSON(vars.CI_RUNS_ON) || vars.CI_RUNS_ON) || 'arc-runner-set-loommud' }}
+    env:
+      LOOM_REF: 24ebbe43000e45cd071e15dbb74cbc4b16a13250
+      SQLX_OFFLINE: "true"
+    steps:
+      # Side by side, so `loom check` over warp never sees loom's own .wf
+      # fixtures.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: warp
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: LoomMud/loom
+          ref: ${{ env.LOOM_REF }}
+          path: loom
+      - run: loom/scripts/ci-ensure-tools.sh cc:build-essential python3:python3-minimal
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master (2026-09-27)
+        with:
+          toolchain: "1.98.1"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: loom
+      - name: Build loom-cli
+        run: cargo build --release --locked -p loom-cli --manifest-path loom/Cargo.toml
+      - name: loom check
+        working-directory: warp
+        run: ../loom/target/release/loom-cli check --deny-warnings .
+      - name: Smoke suite
+        working-directory: warp
+        run: LOOM_CLI="$GITHUB_WORKSPACE/loom/target/release/loom-cli" tests/smoke.py

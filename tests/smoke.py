@@ -431,6 +431,42 @@ def scenario_reserved_names(server):
     c.close()
 
 
+def scenario_propose(server):
+    """OBI-181 design §3: who may *open* a propose PR for which target path
+    (master can_propose), and R2: no live writes to /secure or protected
+    code for any tier, and a T5 writes live only in its own workroom."""
+    ok = r"Proposal checked: "
+    b = login(server, "builder")  # T2, member of start/forest/test
+    b.cmd("propose", r"Usage: propose")
+    b.cmd("propose /domains/forest/wip/glade as /domains/forest/glade : Glade area",
+          ok + r"/domains/forest/glade \(Glade area\)")
+    b.cmd("propose /domains/forest/clearing.wf, /domains/start/hall.wf : Fix exits",
+          ok + r"/domains/forest/clearing\.wf, /domains/start/hall\.wf")
+    b.cmd("propose /doc/building.txt : Notes", ok)
+    b.cmd("propose /std/item.wf : x", r"You may not propose changes to /std/item\.wf")
+    b.cmd("propose /builders/builder/x.wf : x", r"You may not propose changes to /builders/builder/x\.wf")
+    b.cmd("propose /domains/a/wip/x, /domains/b/wip/y as /domains/c : x", r"`as` takes exactly one source path")
+    b.close()
+    a = login(server, "appr")  # T1, no domains
+    a.cmd("propose /builders/appr/box.wf as /domains/start/wip/box.wf : x",
+          r"You may not propose changes to /domains/start/wip/box\.wf")
+    a.close()
+    g = login(server, "gimli")  # T2, member of forest only
+    g.cmd("propose /domains/start/hall.wf : x", r"You may not propose changes to /domains/start/hall\.wf")
+    g.cmd("propose /secure/master.wf : x", r"You may not read /secure/master\.wf")
+    g.close()
+    l = login(server, "legolas")  # T3, lead of start and forest
+    l.cmd("propose /std/item.wf : Item fix", ok)
+    l.cmd("propose /secure/master.wf : x", r"You may not read /secure/master\.wf")
+    l.close()
+    r = login(server, "aragorn")  # T5
+    r.cmd("propose /secure/master.wf : Policy fix", ok)
+    r.cmd("ed /domains/start/hall.wf", r"You may not edit /domains/start/hall\.wf")
+    r.cmd("ed /std/room.wf", r"You may not edit /std/room\.wf")
+    r.cmd("ed /secure/master.wf", r"You may not edit /secure/master\.wf")
+    r.close()
+
+
 SCENARIOS = {
     "basics": (scenario_basics, False),
     "builder": (scenario_builder, False),
@@ -440,6 +476,7 @@ SCENARIOS = {
     "item10k": (scenario_item10k, False),  # runs on a private copy
     "tiers": (scenario_tiers, False),  # runs on a private copy
     "reserved_names": (scenario_reserved_names, False),
+    "propose": (scenario_propose, False),
 }
 
 

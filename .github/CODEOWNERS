@@ -1,0 +1,25 @@
+# Review routing for warp (spec §8.5, OBI-181 design §5). Approval rights
+# per path class follow the tier matrix (spec §5.11.2 "Write, via review"):
+#   domain live content   a lead of that domain, or an arch
+#   protected code        an arch (another arch for an arch's change)
+#   /secure, CI, owners   a root (another root/arch for a root's change)
+#
+# Phase 2 posture (OBI-181 Q-B3.2): the GitHub teams below do not exist
+# yet and reviews come from the loom-reviewer App, which GitHub does not
+# accept as a code owner. The rules are therefore written down but
+# commented out, and branch protection does not require code-owner review.
+# To activate: create the teams with members who can review, uncomment,
+# then turn on "Require review from Code Owners" for main.
+#
+# *                     @LoomMud/archs
+# /domains/             @LoomMud/archs
+# /domains/forest/      @LoomMud/domain-forest-leads @LoomMud/archs
+# /domains/start/       @LoomMud/domain-start-leads @LoomMud/archs
+# /domains/test/        @LoomMud/domain-test-leads @LoomMud/archs
+# /std/                 @LoomMud/archs
+# /cmds/                @LoomMud/archs
+# /daemons/             @LoomMud/archs
+# /include/             @LoomMud/archs
+# /doc/                 @LoomMud/archs
+# /secure/              @LoomMud/roots
+# /.github/             @LoomMud/roots

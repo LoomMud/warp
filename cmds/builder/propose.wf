@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// propose <path>[,<path>...] [as <target>] : <title>
+//
+// Staff command (OBI-181, spec §8.5). Sends files from the live tree to
+// warp `main` as a GitHub pull request, for paths you may only change
+// through review (e.g. a T2's domain live area) or that you want reviewed
+// anyway. `as` promotes one source path to a different target path, which
+// is how wip content goes live:
+//
+//   propose /domains/forest/wip/glade as /domains/forest/glade : Glade area
+//
+// Who may propose what is /secure/master's can_propose (OBI-181 design §3):
+// every source path must be readable by you and every target path
+// proposable. The pull request itself is opened by the driver's GitHub
+// App (`git_propose`, OBI-181 B3.3); review and merge happen on GitHub.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "propose <path>[,<path>...] [as <target>] : <title>: open a pull request on warp main for review. `as` moves one path (e.g. wip -> live) in the proposal."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let req = parse(args)
+    let err = req["error"] ?? []
+    if len(err) > 0 {
+        me.message(err[0])
+        return true
+    }
+    let who = me.query_name() as string
+    let m = load_object("/secure/master")
+    let sources = req["paths"] ?? []
+    let targets = req["targets"] ?? []
+    let title = req["title"] ?? [""]
+    var i = 0
+    while i < len(sources) {
+        if not (m.can_read(who, sources[i]) as bool) {
+            me.message($"You may not read {sources[i]}.")
+            return true
+        }
+        if not (m.can_propose(who, targets[i]) as bool) {
+            me.message($"You may not propose changes to {targets[i]}.")
+            return true
+        }
+        i += 1
+    }
+    // The driver side (git_propose, OBI-181 B3.3) is not in loom yet; until
+    // it is, the command validates the request and says so.
+    me.message($"Proposal checked: {join(targets, ", ")} ({title[0]}).\npropose is not enabled on this server yet.")
+    return true
+}
+
+// Returns {"paths", "targets", "title", "error"}; "error" is empty on
+// success. Kept as a pub function so tests can call it without a player.
+pub fn parse(args: string) -> {string: [string]} {
+    var out: {string: [string]} = {"paths": [], "targets": [], "title": [], "error": []}
+    let halves = split(args, " : ")
+    if len(halves) != 2 or trim(halves[1]) == "" {
+        out["error"] = ["Usage: propose <path>[,<path>...] [as <target>] : <title>"]
+        return out
+    }
+    out["title"] = [trim(halves[1])]
+    let lhs = split(trim(halves[0]), " as ")
+    if len(lhs) > 2 {
+        out["error"] = ["Use `as` at most once."]
+        return out
+    }
+    var paths: [string] = []
+    for p in split(lhs[0], ",") {
+        let q = absolute(p)
+        if q != "" {
+            paths += [q]
+        }
+    }
+    if len(paths) == 0 {
+        out["error"] = ["Propose what? Give at least one path."]
+        return out
+    }
+    var targets = paths
+    if len(lhs) == 2 {
+        if len(paths) != 1 {
+            out["error"] = ["`as` takes exactly one source path."]
+            return out
+        }
+        let t = absolute(lhs[1])
+        if t == "" or t == paths[0] {
+            out["error"] = ["`as` needs a different target path."]
+            return out
+        }
+        targets = [t]
+    }
+    out["paths"] = paths
+    out["targets"] = targets
+    return out
+}
+
+// "domains/x/" -> "/domains/x"; "" stays "".
+fn absolute(arg: string) -> string {
+    var p = trim(arg)
+    if p == "" {
+        return p
+    }
+    if p[0] != "/" {
+        p = "/" + p
+    }
+    while len(p) > 1 and p[len(p) - 1] == "/" {
+        var out = ""
+        var i = 0
+        while i < len(p) - 1 {
+            out += p[i]
+            i += 1
+        }
+        p = out
+    }
+    return p
+}
