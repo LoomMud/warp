@@ -4,3 +4,11 @@ version = 1
 path = ["README.md", ".gitignore", ".github/**", "**/.gitkeep", "loadbot/*.tsv", "tests/*.json"]
 SPDX-FileCopyrightText = "2026 Oberfield"
 SPDX-License-Identifier = "AGPL-3.0-only"
+
+# Builder content (OBI-181 D-B3.10): files written in-game or in the web IDE
+# and sent to main by `propose` need no SPDX header of their own.
+[[annotations]]
+path = ["domains/**", "builders/**", "doc/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Oberfield"
+SPDX-License-Identifier = "AGPL-3.0-only"
