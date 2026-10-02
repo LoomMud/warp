@@ -91,10 +91,12 @@ fn got_name(n: string) {
     }
     wanted = n
     state = "password"
+    set_echo(self(), false)
     ask("Password: ")
 }
 
 fn got_password(pw: string) {
+    set_echo(self(), true)
     state = "waiting"
     request = account_login(wanted, pw)
 }
@@ -102,6 +104,7 @@ fn got_password(pw: string) {
 fn got_confirm(answer: string) {
     if answer == "y" or answer == "yes" {
         state = "new_password"
+        set_echo(self(), false)
         ask("Choose a password (6 or more characters): ")
         return
     }
@@ -116,10 +119,12 @@ fn got_new_password(pw: string) {
     }
     pending_pw = pw
     state = "confirm_password"
+    set_echo(self(), false)
     ask("Confirm password: ")
 }
 
 fn got_confirm_password(pw: string) {
+    set_echo(self(), true)
     let first = pending_pw
     pending_pw = ""
     if pw != first {
@@ -210,5 +215,9 @@ fn got_class(c: string) {
 }
 
 fn net_dead() {
+    // If the connection dropped mid-password-prompt there is no telnet
+    // session left to tell (set_echo() on a dead `conn` is a no-op either
+    // way), but state is reset so a stray `account_result` after `remove()`
+    // can't mistake `pending_pw` for anything live.
     remove()
 }
