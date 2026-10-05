@@ -260,6 +260,48 @@ def scenario_builder(server):
     w.close()
 
 
+def scenario_errors(server):
+    """errors [<prefix>] (OBI-282): the OBI-169/P2-B4 error inbox shown
+    in-game. `builder` gets a workroom object whose heartbeat throws;
+    `errors` must show that group with a count > 0, and `appr` (tier 1,
+    not a member of builder's workroom or domains) must not see it even
+    when asking for it by its exact path -- the efun's own valid_read,
+    not a second check here."""
+    room = os.path.join(server.root, "builders", "builder")
+    os.makedirs(room, exist_ok=True)
+    shutil.copy(
+        os.path.join(ROOT, "tests", "fixtures", "errors", "boom.wf"),
+        os.path.join(room, "boom.wf"),
+    )
+    try:
+        w = login(server, "builder")
+        # `clone` (not `update`): a blueprint that was never loaded runs
+        # no `create()` (so never `set_heartbeat`s) until something
+        # instantiates it -- a clone confined to a workroom can't move
+        # into a live room, which is fine, it only needs to exist.
+        # `clone` either succeeds ("You clone...") or is refused for
+        # confinement ("a confined object cannot move into a live room") --
+        # either way the blueprint is now loaded and `create()` has run, so
+        # only the prompt is worth waiting for.
+        w.cmd("clone /builders/builder/boom")
+        # DEFAULT_HEARTBEAT_INTERVAL_TICKS (20) * the 100ms world tick
+        # (OBI-82): give the heartbeat a few chances to throw before asking.
+        time.sleep(5)
+        m = w.cmd(
+            "errors",
+            r"/builders/builder/boom.*heartbeat\(\): boom: deliberate smoke error \(x(\d+)",
+        )
+        assert int(m.group(1)) > 0, m.group(0)
+        w.cmd("errors /builders/builder", r"boom: deliberate smoke error")
+        w.close()
+
+        a = login(server, "appr")
+        a.cmd("errors /builders/builder", r"No runtime errors recorded\.")
+        a.close()
+    finally:
+        shutil.rmtree(room, ignore_errors=True)
+
+
 def scenario_combat(server):
     p = login(server, "fighter")
     p.cmd("e", r"Edge of the Wood")
@@ -517,6 +559,7 @@ SCENARIOS = {
     "builder": (scenario_builder, False),
     "upgrade_live": (scenario_upgrade_live, False),
     "ed": (scenario_ed, False),
+    "errors": (scenario_errors, True),
     "combat": (scenario_combat, True),
     "item10k": (scenario_item10k, False),  # runs on a private copy
     "tiers": (scenario_tiers, False),  # runs on a private copy
