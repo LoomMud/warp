@@ -1,0 +1,17 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Error-inbox smoke fixture (tests/smoke.py `errors`), installed as
+// /builders/<name>/boom.wf: a workroom object whose heartbeat throws, so
+// OBI-169's error inbox has a real group for `errors` to show.
+
+inherit /std/object
+
+override fn create() {
+    // loom:allow(literal-setter-in-create)
+    set_heartbeat(true)
+}
+
+fn heartbeat() {
+    throw "boom: deliberate smoke error"
+}

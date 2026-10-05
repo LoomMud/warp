@@ -1,0 +1,174 @@
+// SPDX-FileCopyrightText: 2026 Oberfield
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// errors [<prefix>]: staff command (tier 1+, OBI-282 -- closes the OBI-169
+// / P2-B4 gap: the driver has shipped the error inbox, the `errors(prefix)`
+// efun and the `loom_runtime_errors_total{program}` metric since OBI-169,
+// but Warp had no command to read any of it from inside the game).
+//
+// No prefix: the caller's own workroom (/builders/<name>) plus every
+// domain it belongs to, or every program for arch and above (spec:
+// "/"). An explicit <prefix> is passed straight to the efun instead.
+//
+// This command adds no permission check of its own on top of the efun's
+// own `valid_read` filtering (the same gate `read_file`/`ed` use: see
+// /secure/master.can_read's `workroom` and `domain_live`/`domain_wip`
+// rules) or its `/secure/**` message redaction (M-ERR-1, loom OBI-169's
+// doc on crate::errors): a denied program's groups are just absent from
+// what the efun hands back, same as a partial-access `ls`. Duplicating
+// that logic here could drift from it -- see OBI-169's own warning about
+// exactly that -- so this file only groups, sorts, caps and formats rows
+// the efun already decided the caller may see.
+
+inherit /std/command
+
+pub override fn help() -> string {
+    return "errors [<prefix>]: show runtime-error groups (program:line function(): message, xN, first/last seen). No prefix: your own workroom and domains (arch+: everything). What you can see follows the same read access as `ed`/`update`."
+}
+
+pub override fn main(me: object, args: string) -> bool {
+    let prefix = trim(args)
+    var rows: [{string: any}] = []
+    if prefix != "" {
+        rows = errors(normalise(prefix))
+    } else {
+        for p in default_prefixes(me) {
+            rows += errors(p)
+        }
+        rows = sorted_rows(rows)
+    }
+    if len(rows) == 0 {
+        me.message("No runtime errors recorded.")
+        return true
+    }
+    let max_rows = 20
+    let total = len(rows)
+    var shown = total
+    if shown > max_rows {
+        shown = max_rows
+    }
+    var text = ""
+    let now_ms = time() * 1000
+    var i = 0
+    while i < shown {
+        if text != "" {
+            text += "\n"
+        }
+        text += format_row(rows[i], now_ms)
+        i += 1
+    }
+    if total > shown {
+        text += $"\n...{total - shown} more."
+    }
+    me.message(text)
+    return true
+}
+
+// "/builders/<name>/" plus "/domains/<d>/" for every domain `me` belongs
+// to; arch (tier 4) and above get "" (every program -- the efun's own
+// valid_read already lets them read everything, see can_read's `t >= 4`
+// short-circuit, so a single unfiltered call is equivalent and simpler).
+fn default_prefixes(me: object) -> [string] {
+    let who = me.query_name() as string
+    let tier = me.query_tier() as int
+    if tier >= 4 {
+        return [""]
+    }
+    var out = [$"/builders/{who}/"]
+    for d in load_object("/secure/roles").domains(who) as [string] {
+        out += [$"/domains/{d}/"]
+    }
+    return out
+}
+
+// Accept "forest", "/domains/forest" and "domains/forest" alike.
+fn normalise(arg: string) -> string {
+    var p = trim(arg)
+    if p == "" {
+        return p
+    }
+    if p[0] != "/" {
+        p = "/" + p
+    }
+    return p
+}
+
+// Newest last_seen first, ties broken by count (the efun's own ordering,
+// re-applied after merging more than one prefix's rows -- each input list
+// is already sorted this way, but the merge isn't).
+fn sorted_rows(rows: [{string: any}]) -> [{string: any}] {
+    var out = rows
+    var i = 1
+    while i < len(out) {
+        var j = i
+        while j > 0 and less_recent(out[j - 1], out[j]) {
+            let tmp = out[j - 1]
+            out[j - 1] = out[j]
+            out[j] = tmp
+            j -= 1
+        }
+        i += 1
+    }
+    return out
+}
+
+fn less_recent(a: {string: any}, b: {string: any}) -> bool {
+    let al = (a["last_seen_unix_ms"] ?? 0) as int
+    let bl = (b["last_seen_unix_ms"] ?? 0) as int
+    if al != bl {
+        return al < bl
+    }
+    let ac = (a["count"] ?? 0) as int
+    let bc = (b["count"] ?? 0) as int
+    return ac < bc
+}
+
+fn format_row(row: {string: any}, now_ms: int) -> string {
+    let program = strip_wf((row["program"] ?? "") as string)
+    let func = (row["function"] ?? "") as string
+    let line = row["line"]
+    var loc = program
+    if line != null {
+        loc += $":{line as int}"
+    }
+    let message = (row["message"] ?? "") as string
+    let count = (row["count"] ?? 0) as int
+    let first = (row["first_seen_unix_ms"] ?? 0) as int
+    let last = (row["last_seen_unix_ms"] ?? 0) as int
+    return $"{loc} {func}(): {message} (x{count}, first {ago(now_ms, first)}, last {ago(now_ms, last)})"
+}
+
+// "/d/shire/calc.wf" -> "/d/shire/calc" (same convention as `update`'s
+// own path normalisation, reversed).
+fn strip_wf(path: string) -> string {
+    let n = len(path)
+    if n > 3 and path[n - 3] == "." and path[n - 2] == "w" and path[n - 1] == "f" {
+        var out = ""
+        var i = 0
+        while i < n - 3 {
+            out += path[i]
+            i += 1
+        }
+        return out
+    }
+    return path
+}
+
+// "3s ago", "5m ago", "2h ago", "3d ago". Relative times only -- absolute
+// timestamps would need a timezone this efun/command has no notion of.
+fn ago(now_ms: int, then_ms: int) -> string {
+    var secs = (now_ms - then_ms) / 1000
+    if secs < 0 {
+        secs = 0
+    }
+    if secs < 60 {
+        return $"{secs}s ago"
+    }
+    if secs < 3600 {
+        return $"{secs / 60}m ago"
+    }
+    if secs < 86400 {
+        return $"{secs / 3600}h ago"
+    }
+    return $"{secs / 86400}d ago"
+}

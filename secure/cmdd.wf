@@ -43,7 +43,8 @@ pub fn builder_commands() -> {string: string} {
         "clone": "/cmds/builder/clone",
         "dest": "/cmds/builder/dest",
         "goto": "/cmds/builder/goto",
-        "reset": "/cmds/builder/reset"
+        "reset": "/cmds/builder/reset",
+        "errors": "/cmds/builder/errors"
     }
 }
 
