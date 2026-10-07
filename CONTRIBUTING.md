@@ -20,6 +20,13 @@ accepting contributions under AGPL-3.0-only with DCO sign-off) once the contribu
 - Every commit must be DCO signed (`git commit -s`).
 - Add SPDX headers to all new source files.
 - Never commit plaintext secrets or unlicensed third-party assets.
+- **No synthetic CPU/load or stress testing on the shared host without board consent**
+  (OBI-306/OBI-307). Do not start busy-loop spinners (`while :; do :; done`), parallel builds whose
+  only purpose is to add load, or stress loops unless the issue has a board-accepted confirmation
+  for that test. Ordinary builds and tests are fine. So are sequential repeat runs with no added load.
+  To prove a flake fix, use a deterministic reproduction plus a regression test, or N *sequential*
+  runs with no added load. If you really need contention, say so in the plan and get board consent
+  before you run it.
 - Commits made by Paperclip agents must end with:
   `Co-Authored-By: Paperclip <noreply@paperclip.ing>`.
 
